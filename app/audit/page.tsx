@@ -88,7 +88,7 @@ export default function AuditLogsPage() {
                     <SelectValue placeholder="All Actions" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Actions</SelectItem>
+                    <SelectItem value="all">All Actions</SelectItem>
                     {actionTypes.map((action) => (
                       <SelectItem key={action} value={action}>
                         {action.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}

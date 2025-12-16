@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/requireAuth";
 import { connect } from "@/lib/mongoose";
 import Attendance from "@/model/Attendance";
+import { attachReactRefresh } from "next/dist/build/webpack-config";
 
 export async function GET(req: Request) {
   try {
@@ -30,9 +31,8 @@ export async function GET(req: Request) {
       .sort({ date: -1 })
       .limit(100)
       .lean();
-
-    return NextResponse.json({ attendance });
-  } catch (err: any) {
+      return NextResponse.json({ attendance });
+    } catch (err: any) {
     return NextResponse.json({ error: err.message || "Unauthorized" }, { status: 401 });
   }
 }

@@ -6,17 +6,18 @@ import User from "@/model/User";
 import Employee from "@/model/Employee";
 import AuditLog from "@/model/AuditLog";
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { user } = await requireHR(req);
     await connect();
 
-    const userData = await User.findById(params.id).lean();
+    const userData = await User.findById(id).lean();
     if (!userData) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
-    const employeeData = await Employee.findOne({ userId: params.id })
+    const employeeData = await Employee.findOne({ userId: id })
       .populate("managerId", "name email")
       .lean();
 
@@ -31,10 +32,11 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await requireHR(req);
     await connect();
+    const { id } = await params;
 
     const {
       name,
@@ -51,7 +53,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       emergencyContact,
     } = await req.json();
 
-    const existingUser = await User.findById(params.id);
+    const existingUser = await User.findById(id);
     if (!existingUser) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
@@ -72,9 +74,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     await existingUser.save();
 
     // Update or create employee record
-    let employee = await Employee.findOne({ userId: params.id });
+    let employee = await Employee.findOne({ userId: id });
     if (!employee) {
-      employee = await Employee.create({ userId: params.id });
+      employee = await Employee.create({ userId: id });
     }
 
     if (employeeCode !== undefined) employee.employeeCode = employeeCode;
@@ -91,9 +93,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     await AuditLog.create({
       action: "employee_update",
       userId: (user as any)._id,
-      targetUserId: params.id,
+      targetUserId: id,
       entityType: "User",
-      entityId: params.id,
+      entityId: id,
       oldValue: oldValues,
       newValue: {
         name: existingUser.name,
@@ -113,12 +115,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await requireHR(req);
     await connect();
+    const { id } = await params;
 
-    const existingUser = await User.findById(params.id);
+    const existingUser = await User.findById(id);
     if (!existingUser) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
@@ -131,9 +134,9 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     await AuditLog.create({
       action: "employee_deactivate",
       userId: (user as any)._id,
-      targetUserId: params.id,
+      targetUserId: id,
       entityType: "User",
-      entityId: params.id,
+      entityId: id,
       oldValue: { isActive: true },
       newValue: { isActive: false },
       remarks: `Employee deactivated by ${(user as any).name}`,

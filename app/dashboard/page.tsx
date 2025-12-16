@@ -9,10 +9,13 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import DashboardLayout from "@/components/DashboardLayout";
+import { Pin, Bell } from "lucide-react";
+import Link from "next/link";
 
 export default function Dashboard() {
   const router = useRouter();
   const [attendance, setAttendance] = useState<any>(null);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalName, setModalName] = useState("");
   const [modalEmail, setModalEmail] = useState("");
@@ -24,6 +27,23 @@ export default function Dashboard() {
     
     fetch("/api/attendance/today", { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json()).then(j => setAttendance(j.attendance || null));
+    
+    fetch("/api/announcements?isPinned=true", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(j => {
+        if (j.announcements) {
+          // Get pinned announcements and up to 3 most recent regular announcements
+          const pinned = j.announcements.filter((a: any) => a.isPinned);
+          fetch("/api/announcements", { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json())
+            .then(j2 => {
+              if (j2.announcements) {
+                const regular = j2.announcements.filter((a: any) => !a.isPinned).slice(0, 3);
+                setAnnouncements([...pinned, ...regular].slice(0, 5));
+              }
+            });
+        }
+      });
   }, []);
 
   async function punch() {
@@ -160,6 +180,54 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Announcements Section */}
+        {announcements.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  <CardTitle>Announcements</CardTitle>
+                </div>
+                <Link href="/announcements">
+                  <Button variant="outline" size="sm">
+                    View All
+                  </Button>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {announcements.map((announcement) => (
+                  <div
+                    key={announcement._id}
+                    className={`p-4 rounded-lg border ${
+                      announcement.isPinned
+                        ? "bg-primary/5 border-primary/50"
+                        : "bg-muted/50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2 mb-2">
+                      {announcement.isPinned && (
+                        <Pin className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <h3 className="font-semibold">{announcement.title}</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {new Date(announcement.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap line-clamp-3">
+                      {announcement.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );

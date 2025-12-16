@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Calendar, Clock, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
+import AttendanceCalendar from "@/components/AttendanceCalendar";
 
 export default function AttendancePage() {
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -66,14 +66,18 @@ export default function AttendancePage() {
     }
   }
 
-  const getStatusIcon = (status?: string) => {
-    switch (status) {
-      case "Present":
-        return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
-      case "Absent":
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      default:
-        return <Clock className="h-4 w-4 text-muted-foreground" />;
+  const handleDateClick = (date: string) => {
+    const record = attendance.find((r) => r.date === date);
+    if (record) {
+      const inPunch = record.punches?.find((p: any) => p.type === "IN");
+      const outPunch = record.punches?.find((p: any) => p.type === "OUT");
+      const details = [
+        `Status: ${record.status || "N/A"}`,
+        inPunch ? `Check-In: ${new Date(inPunch.time).toLocaleTimeString()}` : "Check-In: -",
+        outPunch ? `Check-Out: ${new Date(outPunch.time).toLocaleTimeString()}` : "Check-Out: -",
+        record.totalHours ? `Total Hours: ${record.totalHours.toFixed(2)} hrs` : "Total Hours: -",
+      ].join("\n");
+      toast.info(details, { duration: 5000 });
     }
   };
 
@@ -112,56 +116,12 @@ export default function AttendancePage() {
           <CardContent>
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Loading...</div>
-            ) : attendance.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No attendance records found</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Date</th>
-                      <th className="text-left p-2">Status</th>
-                      <th className="text-left p-2">Check-In</th>
-                      <th className="text-left p-2">Check-Out</th>
-                      <th className="text-left p-2">Total Hours</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attendance.map((record) => {
-                      const inPunch = record.punches?.find((p: any) => p.type === "IN");
-                      const outPunch = record.punches?.find((p: any) => p.type === "OUT");
-                      return (
-                        <tr key={record._id} className="border-b hover:bg-muted/50">
-                          <td className="p-2">
-                            {new Date(record.date + "T00:00:00").toLocaleDateString()}
-                          </td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-2">
-                              {getStatusIcon(record.status)}
-                              <span>{record.status || "N/A"}</span>
-                            </div>
-                          </td>
-                          <td className="p-2">
-                            {inPunch
-                              ? new Date(inPunch.time).toLocaleTimeString()
-                              : "-"}
-                          </td>
-                          <td className="p-2">
-                            {outPunch
-                              ? new Date(outPunch.time).toLocaleTimeString()
-                              : "-"}
-                          </td>
-                          <td className="p-2">
-                            {record.totalHours
-                              ? `${record.totalHours.toFixed(2)} hrs`
-                              : "-"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <AttendanceCalendar
+                attendance={attendance}
+                month={month}
+                onDateClick={handleDateClick}
+              />
             )}
           </CardContent>
         </Card>

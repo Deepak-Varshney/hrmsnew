@@ -123,7 +123,7 @@ export default function TeamAttendancePage() {
                     <SelectValue placeholder="All Employees" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Employees</SelectItem>
+                    <SelectItem value="allemp">All Employees</SelectItem>
                     {employees.map((emp) => (
                       <SelectItem key={emp.id} value={emp.id}>
                         {emp.name} {emp.employeeCode && `(${emp.employeeCode})`}

@@ -111,7 +111,7 @@ export default function LeaveHistoryPage() {
                     <SelectValue placeholder="All Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Status</SelectItem>
+                    <SelectItem value="allstatus">All Status</SelectItem>
                     <SelectItem value="Pending">Pending</SelectItem>
                     <SelectItem value="Approved">Approved</SelectItem>
                     <SelectItem value="Rejected">Rejected</SelectItem>
@@ -130,7 +130,7 @@ export default function LeaveHistoryPage() {
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Types</SelectItem>
+                    <SelectItem value="alltypes">All Types</SelectItem>
                     <SelectItem value="CL">Casual Leave</SelectItem>
                     <SelectItem value="SL">Sick Leave</SelectItem>
                     <SelectItem value="EL">Earned Leave</SelectItem>

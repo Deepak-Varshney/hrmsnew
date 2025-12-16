@@ -320,7 +320,7 @@ export default function EmployeesPage() {
                         <SelectValue placeholder="Select manager" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No Manager</SelectItem>
+                        <SelectItem value="nomgr">No Manager</SelectItem>
                         {managers.map((mgr) => (
                           <SelectItem key={mgr._id} value={mgr._id}>
                             {mgr.name} ({mgr.role})
@@ -377,7 +377,7 @@ export default function EmployeesPage() {
                     <SelectValue placeholder="All Roles" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Roles</SelectItem>
+                    <SelectItem value="allroles">All Roles</SelectItem>
                     <SelectItem value="Employee">Employee</SelectItem>
                     <SelectItem value="Manager">Manager</SelectItem>
                     <SelectItem value="HR">HR</SelectItem>
@@ -391,7 +391,7 @@ export default function EmployeesPage() {
                     <SelectValue placeholder="All Departments" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Departments</SelectItem>
+                    <SelectItem value="alldep">All Departments</SelectItem>
                     {departments.map((dept) => (
                       <SelectItem key={dept} value={dept}>
                         {dept}
