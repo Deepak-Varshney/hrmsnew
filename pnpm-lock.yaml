@@ -2503,11 +2503,6 @@ packages:
 
 snapshots:
 
-<<<<<<< HEAD
-  '-@0.0.1': {}
-
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
   '@alloc/quick-lru@5.2.0': {}
 
   '@babel/code-frame@7.27.1':
@@ -4027,6 +4022,11 @@ snapshots:
 
   functions-have-names@1.2.3: {}
 
+<<<<<<< HEAD
+  g@2.0.1: {}
+
+=======
+>>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
   generator-function@2.0.1: {}
 
   gensync@1.0.0-beta.2: {}
@@ -4585,11 +4585,6 @@ snapshots:
 
   picomatch@4.0.3: {}
 
-<<<<<<< HEAD
-  pnpm@10.26.0: {}
-
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
   possible-typed-array-names@1.1.0: {}
 
   postcss@8.4.31:
