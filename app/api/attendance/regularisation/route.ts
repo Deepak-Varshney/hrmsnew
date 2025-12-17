@@ -20,8 +20,16 @@ export async function POST(req: Request) {
     const employee = await Employee.findOne({ userId: (user as any)._id })
       .populate("managerId", "name email")
       .lean();
-    const managerId = employee?.managerId?._id;
-    const managerName = employee?.managerId?.name || "Manager";
+    
+    // Handle populated managerId - when populated, it's an object with _id, name, email
+    // When not populated or doesn't exist, it's null/undefined or ObjectId
+    const manager = employee?.managerId as any;
+    const managerId = manager && typeof manager === 'object' && '_id' in manager 
+      ? manager._id 
+      : (manager || null);
+    const managerName = manager && typeof manager === 'object' && 'name' in manager
+      ? manager.name 
+      : "Manager";
 
     // Get existing attendance for audit
     const existingAttendance = await Attendance.findOne({
@@ -36,14 +44,14 @@ export async function POST(req: Request) {
       reason,
       attachment,
       status: "Pending",
-      approverId: managerId,
+      approverId: managerId || undefined,
       originalAttendance: existingAttendance
         ? {
             punches: existingAttendance.punches,
             totalHours: existingAttendance.totalHours,
             status: existingAttendance.status,
           }
-        : null,
+        : undefined,
       appliedAt: new Date(),
     });
 
