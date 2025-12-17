@@ -76,13 +76,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (email) existingUser.email = email;
     if (role) existingUser.role = role;
     if (isActive !== undefined) existingUser.isActive = isActive;
-<<<<<<< HEAD
     // Update password if provided
     if (password) {
       existingUser.passwordHash = await hashPassword(password);
     }
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
     await existingUser.save();
 
     // Update or create employee record
