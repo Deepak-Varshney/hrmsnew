@@ -8,12 +8,6 @@ importers:
 
   .:
     dependencies:
-<<<<<<< HEAD
-      '-':
-        specifier: ^0.0.1
-        version: 0.0.1
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
       '@radix-ui/react-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -35,12 +29,6 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-<<<<<<< HEAD
-      g:
-        specifier: ^2.0.1
-        version: 2.0.1
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.2
@@ -102,12 +90,6 @@ importers:
 
 packages:
 
-<<<<<<< HEAD
-  '-@0.0.1':
-    resolution: {integrity: sha512-3HfneK3DGAm05fpyj20sT3apkNcvPpCuccOThOPdzz8sY7GgQGe0l93XH9bt+YzibcTIgUAIMoyVJI740RtgyQ==}
-
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
@@ -1526,12 +1508,6 @@ packages:
   functions-have-names@1.2.3:
     resolution: {integrity: sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==}
 
-<<<<<<< HEAD
-  g@2.0.1:
-    resolution: {integrity: sha512-Fi6Ng5fZ/ANLQ15H11hCe+09sgUoNvDEBevVgx3KoYOhsH5iLNPn54hx0jPZ+3oSWr+xajnp2Qau9VmPsc7hTA==}
-
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
   generator-function@2.0.1:
     resolution: {integrity: sha512-SFdFmIJi+ybC0vjlHN0ZGVGHc3lgE0DxPAT0djjVg+kjOnSqclqmj0KQ7ykTOLP6YxoqOvuAODGdcHJn+43q3g==}
     engines: {node: '>= 0.4'}
@@ -2130,14 +2106,6 @@ packages:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
     engines: {node: '>=12'}
 
-<<<<<<< HEAD
-  pnpm@10.26.0:
-    resolution: {integrity: sha512-Oz9scl6+cSUGwKsa1BM8+GsfS2h+/85iqbOLTXLjlUJC5kMZD8UfoWQpScc19APevUT1yw7dZXq+Y6i2p+HkAg==}
-    engines: {node: '>=18.12'}
-    hasBin: true
-
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
@@ -4059,11 +4027,6 @@ snapshots:
 
   functions-have-names@1.2.3: {}
 
-<<<<<<< HEAD
-  g@2.0.1: {}
-
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
   generator-function@2.0.1: {}
 
   gensync@1.0.0-beta.2: {}

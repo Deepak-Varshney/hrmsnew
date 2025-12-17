@@ -42,10 +42,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const {
       name,
       email,
-<<<<<<< HEAD
       password,
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
       role,
       isActive,
       employeeCode,
