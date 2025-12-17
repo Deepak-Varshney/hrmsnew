@@ -44,12 +44,6 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-<<<<<<< HEAD
-      pnpm:
-        specifier: ^10.26.0
-        version: 10.26.0
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
       react:
         specifier: 19.2.0
         version: 19.2.0
@@ -4022,11 +4016,6 @@ snapshots:
 
   functions-have-names@1.2.3: {}
 
-<<<<<<< HEAD
-  g@2.0.1: {}
-
-=======
->>>>>>> 1597a035a081ffeccd12e66a384f1150f4ed74f5
   generator-function@2.0.1: {}
 
   gensync@1.0.0-beta.2: {}
