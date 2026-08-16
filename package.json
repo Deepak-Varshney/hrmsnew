@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "seed:admin": "node scripts/seed-admin.js",
     "seed:super-admin": "tsx scripts/seed-super-admin.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "migrate:multi-tenant": "tsx scripts/migrate-to-multi-tenant.ts"
   },
   "dependencies": {

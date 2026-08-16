@@ -1,484 +1,300 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { Search, Users, UserCheck, UserMinus, LogOut, Building2 } from "lucide-react";
+
+import { AppShell, useSession } from "@/components/app/AppShell";
+import { initialsOf } from "@/components/app/TopBar";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
+import { StatusPill, EMPLOYEE_STATUS_TONE } from "@/components/ui/status-pill";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
-import { Plus, Edit, Trash2, Users, Search } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { api, qs } from "@/lib/api-client";
 
-export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [managers, setManagers] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterRole, setFilterRole] = useState("");
-  const [filterDepartment, setFilterDepartment] = useState("");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<any>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    role: "Employee",
-    employeeCode: "",
-    department: "",
-    designation: "",
-    managerId: "",
-    joiningDate: "",
-    phone: "",
+interface EmployeeRow {
+  _id: string;
+  employeeCode: string;
+  displayName: string;
+  photo: string | null;
+  contact?: { workEmail?: string };
+  employment?: { status?: string; dateOfJoining?: string };
+  designationId?: { title?: string } | null;
+  departmentId?: { name?: string } | null;
+}
+
+interface Summary {
+  onRoll: number;
+  total: number;
+  active: number;
+  probation: number;
+  noticePeriod: number;
+  onLeave: number;
+  departed: number;
+  largestTeam: { name: string; count: number } | null;
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "Active",
+  probation: "Probation",
+  "notice-period": "Notice period",
+  "on-leave": "On leave",
+  exited: "Departed",
+};
+
+const STATUS_FILTERS = [
+  { value: "", label: "All statuses" },
+  { value: "active", label: "Active" },
+  { value: "probation", label: "Probation" },
+  { value: "notice-period", label: "Notice period" },
+  { value: "on-leave", label: "On leave" },
+  { value: "exited", label: "Departed" },
+];
+
+function formatDate(value?: string) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
+}
 
-  useEffect(() => {
-    loadEmployees();
-    loadManagers();
-  }, [filterRole, filterDepartment]);
+/** What this page shows depends on who is reading it — say so, don't imply it. */
+function describeScope(role: string, orgName?: string) {
+  switch (role) {
+    case "SUPER_ADMIN":
+      return `Everyone on the roll at ${orgName ?? "this organisation"}.`;
+    case "ADMIN":
+      return "Everyone on the roll, including people who have left.";
+    case "MANAGER":
+      return "You and the people reporting to you.";
+    default:
+      return "Your own record.";
+  }
+}
 
-  async function loadEmployees() {
+function EmployeesContent() {
+  const session = useSession();
+
+  const [rows, setRows] = useState<EmployeeRow[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const load = useCallback(async () => {
     setLoading(true);
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
     try {
-      const params = new URLSearchParams();
-      if (filterRole) params.append("role", filterRole);
-      if (filterDepartment) params.append("department", filterDepartment);
-
-      const res = await fetch(`/api/employees?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setEmployees(data.employees || []);
-      } else {
-        toast.error(data.error || "Failed to load employees");
-      }
-    } catch (error) {
-      toast.error("Failed to load employees");
+      const [list, sum] = await Promise.all([
+        api<{ employees: EmployeeRow[] }>(
+          `/api/employees${qs({ search, status, limit: 100 })}`
+        ),
+        api<{ summary: Summary }>("/api/employees/summary"),
+      ]);
+      setRows(list.employees);
+      setSummary(sum.summary);
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not load employees");
     } finally {
       setLoading(false);
     }
+  }, [search, status]);
+
+  useEffect(() => {
+    load();
+    // Runs once; subsequent loads are triggered by Show.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function applyFilters() {
+    setHasSearched(Boolean(search || status));
+    load();
   }
-
-  async function loadManagers() {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    try {
-      const res = await fetch("/api/employees/managers", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setManagers(data.managers || []);
-      }
-    } catch (error) {
-      // Ignore errors
-    }
-  }
-
-  function openCreateDialog() {
-    setEditingEmployee(null);
-    setFormData({
-      name: "",
-      email: "",
-      password: "",
-      role: "Employee",
-      employeeCode: "",
-      department: "",
-      designation: "",
-      managerId: "",
-      joiningDate: "",
-      phone: "",
-    });
-    setDialogOpen(true);
-  }
-
-  function openEditDialog(employee: any) {
-    setEditingEmployee(employee);
-    setFormData({
-      name: employee.name,
-      email: employee.email,
-      password: "", // Don't prefill password
-      role: employee.role,
-      employeeCode: employee.employeeCode || "",
-      department: employee.department || "",
-      designation: employee.designation || "",
-      managerId: employee.managerId || "",
-      joiningDate: employee.joiningDate
-        ? new Date(employee.joiningDate).toISOString().split("T")[0]
-        : "",
-      phone: employee.phone || "",
-    });
-    setDialogOpen(true);
-  }
-
-  async function saveEmployee() {
-    if (!formData.name || !formData.email) {
-      toast.error("Name and email are required");
-      return;
-    }
-
-    if (!editingEmployee && !formData.password) {
-      toast.error("Password is required for new employees");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      toast.error("Please login again");
-      return;
-    }
-
-    try {
-      const url = editingEmployee
-        ? `/api/employees/${editingEmployee.id}`
-        : "/api/employees";
-      const method = editingEmployee ? "PUT" : "POST";
-
-      const body: any = { ...formData };
-      if (!editingEmployee || formData.password) {
-        body.password = formData.password;
-      } else {
-        delete body.password;
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(
-          editingEmployee ? "Employee updated successfully" : "Employee created successfully"
-        );
-        setDialogOpen(false);
-        loadEmployees();
-      } else {
-        toast.error(data.error || "Failed to save employee");
-      }
-    } catch (error) {
-      toast.error("Failed to save employee");
-    }
-  }
-
-  async function deactivateEmployee(id: string) {
-    if (!confirm("Are you sure you want to deactivate this employee?")) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    try {
-      const res = await fetch(`/api/employees/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success("Employee deactivated successfully");
-        loadEmployees();
-      } else {
-        toast.error(data.error || "Failed to deactivate employee");
-      }
-    } catch (error) {
-      toast.error("Failed to deactivate employee");
-    }
-  }
-
-  const filteredEmployees = employees.filter((emp) => {
-    const matchesSearch =
-      !searchTerm ||
-      emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeCode?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
-
-  const departments = Array.from(new Set(employees.map((e) => e.department).filter(Boolean)));
 
   return (
-    <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Employee Management</h1>
-            <p className="text-muted-foreground">Manage employees, roles, and departments</p>
-          </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openCreateDialog}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Employee
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingEmployee ? "Edit Employee" : "Add New Employee"}
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Name *</Label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Full name"
-                    />
-                  </div>
-                  <div>
-                    <Label>Email *</Label>
-                    <Input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="email@example.com"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label>Password {!editingEmployee && "*"}</Label>
-                  <Input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder={editingEmployee ? "Leave blank to keep current password" : "Password"}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Role *</Label>
-                    <Select
-                      value={formData.role}
-                      onValueChange={(value) => setFormData({ ...formData, role: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Employee">Employee</SelectItem>
-                        <SelectItem value="Manager">Manager</SelectItem>
-                        <SelectItem value="HR">HR</SelectItem>
-                        <SelectItem value="Admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Employee Code</Label>
-                    <Input
-                      value={formData.employeeCode}
-                      onChange={(e) =>
-                        setFormData({ ...formData, employeeCode: e.target.value })
-                      }
-                      placeholder="EMP001"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Department</Label>
-                    <Input
-                      value={formData.department}
-                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                      placeholder="Department"
-                    />
-                  </div>
-                  <div>
-                    <Label>Designation</Label>
-                    <Input
-                      value={formData.designation}
-                      onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                      placeholder="Designation"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Manager</Label>
-                    <Select
-                      value={formData.managerId}
-                      onValueChange={(value) => setFormData({ ...formData, managerId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select manager" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nomgr">No Manager</SelectItem>
-                        {managers.map((mgr) => (
-                          <SelectItem key={mgr._id} value={mgr._id}>
-                            {mgr.name} ({mgr.role})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Joining Date</Label>
-                    <Input
-                      type="date"
-                      value={formData.joiningDate}
-                      onChange={(e) => setFormData({ ...formData, joiningDate: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label>Phone</Label>
-                  <Input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="Phone number"
-                  />
-                </div>
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={saveEmployee}>Save</Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+    <>
+      <PageHeader
+        title="Employees"
+        description={describeScope(session.role, session.org?.name)}
+      />
+
+      {summary ? (
+        <StatGrid>
+          <StatCard
+            icon={Users}
+            label="On roll"
+            value={summary.onRoll}
+            sublabel={
+              summary.departed > 0
+                ? `${summary.total} on record · ${summary.departed} departed`
+                : "Everyone currently employed"
+            }
+          />
+          <StatCard
+            icon={UserCheck}
+            label="Active"
+            value={summary.active}
+            tone="success"
+            sublabel={
+              summary.probation > 0
+                ? `${summary.probation} still on probation`
+                : "Confirmed and working"
+            }
+          />
+          <StatCard
+            icon={UserMinus}
+            label="Away"
+            value={summary.onLeave + summary.noticePeriod}
+            sublabel="On leave or serving notice, still on the roll"
+          />
+          <StatCard
+            icon={LogOut}
+            label="Departed"
+            value={summary.departed}
+            sublabel="Off headcount, records kept"
+          />
+          {summary.largestTeam ? (
+            <StatCard
+              icon={Building2}
+              label="Largest team"
+              value={
+                <span className="text-2xl">{summary.largestTeam.name}</span>
+              }
+              sublabel={`${summary.largestTeam.count} ${
+                summary.largestTeam.count === 1 ? "person" : "people"
+              }`}
+            />
+          ) : null}
+        </StatGrid>
+      ) : null}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+            placeholder="Search name, code or email"
+            className="pl-9"
+            aria-label="Search employees"
+          />
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search employees..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div>
-                <Select value={filterRole} onValueChange={setFilterRole}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Roles" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="allroles">All Roles</SelectItem>
-                    <SelectItem value="Employee">Employee</SelectItem>
-                    <SelectItem value="Manager">Manager</SelectItem>
-                    <SelectItem value="HR">HR</SelectItem>
-                    <SelectItem value="Admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alldep">All Departments</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          aria-label="Filter by status"
+          className="h-9 rounded-md border bg-surface px-3 text-sm"
+        >
+          {STATUS_FILTERS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
 
-        {/* Employees List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Employees ({filteredEmployees.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading...</div>
-            ) : filteredEmployees.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No employees found</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Name</th>
-                      <th className="text-left p-2">Email</th>
-                      <th className="text-left p-2">Role</th>
-                      <th className="text-left p-2">Department</th>
-                      <th className="text-left p-2">Designation</th>
-                      <th className="text-left p-2">Status</th>
-                      <th className="text-left p-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEmployees.map((emp) => (
-                      <tr key={emp.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2 font-medium">{emp.name}</td>
-                        <td className="p-2 text-sm text-muted-foreground">{emp.email}</td>
-                        <td className="p-2">
-                          <span className="px-2 py-1 rounded text-xs bg-primary/10 text-primary">
-                            {emp.role}
-                          </span>
-                        </td>
-                        <td className="p-2 text-sm">{emp.department || "-"}</td>
-                        <td className="p-2 text-sm">{emp.designation || "-"}</td>
-                        <td className="p-2">
-                          <span
-                            className={`px-2 py-1 rounded text-xs ${
-                              emp.isActive
-                                ? "bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300"
-                                : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                            }`}
-                          >
-                            {emp.isActive ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                        <td className="p-2">
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditDialog(emp)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            {emp.isActive && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => deactivateEmployee(emp.id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <Button onClick={applyFilters}>Show</Button>
       </div>
-    </DashboardLayout>
+
+      <div className="overflow-hidden rounded-lg border bg-surface">
+        {loading ? (
+          <div className="divide-y">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-4">
+                <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-40 animate-pulse rounded bg-muted" />
+                  <div className="h-2 w-24 animate-pulse rounded bg-muted" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            className="border-0"
+            icon={Users}
+            title={hasSearched ? "No matches" : "Nobody here yet"}
+            description={
+              hasSearched
+                ? "No employee matches those filters. Try a different name, code, or status."
+                : "Once employees are added they appear here, with their department, status, and joining date."
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="eyebrow px-4 py-3 font-semibold">Employee</th>
+                  <th className="eyebrow px-4 py-3 font-semibold">Designation</th>
+                  <th className="eyebrow hidden px-4 py-3 font-semibold md:table-cell">
+                    Department
+                  </th>
+                  <th className="eyebrow px-4 py-3 font-semibold">Status</th>
+                  <th className="eyebrow hidden px-4 py-3 font-semibold sm:table-cell">
+                    Joined
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {rows.map((row) => {
+                  const status = row.employment?.status ?? "active";
+                  return (
+                    <tr key={row._id} className="transition-colors hover:bg-muted/40">
+                      <td className="px-4 py-3">
+                        <Link href={`/employees/${row._id}`} className="flex items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                            {initialsOf(row.displayName)}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {row.displayName}
+                            </span>
+                            <span className="tabular block truncate text-xs text-subtle-foreground">
+                              {row.employeeCode}
+                            </span>
+                          </span>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {row.designationId?.title ?? "—"}
+                      </td>
+                      <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                        {row.departmentId?.name ?? "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusPill tone={EMPLOYEE_STATUS_TONE[status] ?? "neutral"}>
+                          {STATUS_LABEL[status] ?? status}
+                        </StatusPill>
+                      </td>
+                      <td className="tabular hidden px-4 py-3 text-muted-foreground sm:table-cell">
+                        {formatDate(row.employment?.dateOfJoining)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
+export default function EmployeesPage() {
+  return (
+    <AppShell>
+      <EmployeesContent />
+    </AppShell>
+  );
+}
