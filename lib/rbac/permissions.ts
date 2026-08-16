@@ -144,6 +144,37 @@ const ROLE_PERMISSIONS: Record<Exclude<Role, "SUPER_ADMIN">, PermissionMap> = {
     "activity.read": "team",
   },
 
+  /**
+   * A lead runs a team but does not own its records: they can see everyone
+   * reporting to them and decide their leave, but cannot edit or remove an
+   * employee. Personnel changes stay with MANAGER and ADMIN.
+   */
+  LEAD: {
+    "employee.read": "team",
+    "employee.export": "team",
+    // No employee.update or employee.delete — read-only on people.
+    // No employee.pii.read — Aadhaar, PAN and bank stay with HR.
+
+    "document.read": "team",
+
+    "asset.read": "team",
+
+    // Read-only: needed to populate filters and dropdowns.
+    "master.read": "org",
+
+    "checklist.complete": "self",
+
+    "attendance.punch": "self",
+    "attendance.read": "team",
+    "attendance.approve": "team",
+
+    "leave.request": "self",
+    "leave.read": "team",
+    "leave.approve": "team",
+
+    "activity.read": "team",
+  },
+
   EMPLOYEE: {
     "employee.read": "self",
     "employee.update": "self",

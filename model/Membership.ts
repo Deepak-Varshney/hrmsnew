@@ -14,7 +14,7 @@
 import mongoose, { Schema } from "mongoose";
 import { softDelete, activityLog } from "@/lib/db/plugins";
 
-export type MembershipRole = "ADMIN" | "MANAGER" | "EMPLOYEE";
+export type MembershipRole = "ADMIN" | "MANAGER" | "LEAD" | "EMPLOYEE";
 export type MembershipStatus = "invited" | "active" | "suspended";
 
 export interface IMembership {
@@ -45,7 +45,7 @@ const MembershipSchema = new Schema<IMembership>(
     },
     role: {
       type: String,
-      enum: ["ADMIN", "MANAGER", "EMPLOYEE"],
+      enum: ["ADMIN", "MANAGER", "LEAD", "EMPLOYEE"],
       required: true,
       default: "EMPLOYEE",
     },

@@ -12,7 +12,17 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
-export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "EMPLOYEE";
+/**
+ * Permission level. Distinct from Designation, which is a job title and
+ * carries no permissions.
+ *
+ * SUPER_ADMIN  platform, every organisation
+ * ADMIN        the whole organisation, including PII and payroll
+ * MANAGER      own reporting subtree, may modify it
+ * LEAD         own reporting subtree, read-only, but approves leave
+ * EMPLOYEE     self only
+ */
+export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "LEAD" | "EMPLOYEE";
 
 export interface RequestContext {
   /** Authenticated User._id, as a string. */

@@ -1,9 +1,8 @@
 // components/app/nav.ts
 //
 // Navigation is grouped by what the person is trying to do, not by which
-// module the engineer built. "TODAY" is the things you act on this morning;
-// "PEOPLE" is the roster you manage; "ACCOUNT" is you. A flat list of twelve
-// links makes the reader do that sorting themselves, every time.
+// module the engineer built. "Today" is what you act on this morning;
+// "People" is the roster and the money; "Account" is you.
 
 import type { LucideIcon } from "lucide-react";
 import {
@@ -21,7 +20,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "EMPLOYEE";
+export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "LEAD" | "EMPLOYEE";
 
 export interface NavItem {
   href: string;
@@ -36,11 +35,7 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-const DASHBOARD: NavItem = {
-  href: "/dashboard",
-  label: "Dashboard",
-  icon: LayoutDashboard,
-};
+const DASHBOARD: NavItem = { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
 const ATTENDANCE: NavItem = { href: "/attendance", label: "Attendance", icon: Clock3 };
 const LEAVES: NavItem = { href: "/leave", label: "Leaves", icon: CalendarDays };
 const ANNOUNCEMENTS: NavItem = {
@@ -49,34 +44,28 @@ const ANNOUNCEMENTS: NavItem = {
   icon: Megaphone,
   badgeKey: "announcements",
 };
-const PROFILE: NavItem = { href: "/me", label: "My profile", icon: UserRound };
+const EMPLOYEES: NavItem = { href: "/employees", label: "Employees", icon: Users };
+const PAYROLL: NavItem = { href: "/payroll", label: "Payroll", icon: Wallet };
+const PROFILE: NavItem = { href: "/profile", label: "My profile", icon: UserRound };
 
 const TODAY = (): NavGroup => ({
   label: "Today",
   items: [DASHBOARD, ATTENDANCE, LEAVES, ANNOUNCEMENTS],
 });
 
-export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
-  EMPLOYEE: [TODAY(), { label: "Account", items: [PROFILE] }],
+/** Everyone sees their own payslips; only leadership sees the roster. */
+const withTeam: NavGroup = { label: "People", items: [EMPLOYEES, PAYROLL] };
+const selfOnly: NavGroup = { label: "People", items: [PAYROLL] };
+const ACCOUNT: NavGroup = { label: "Account", items: [PROFILE] };
 
-  MANAGER: [
-    TODAY(),
-    {
-      label: "People",
-      items: [{ href: "/employees", label: "Employees", icon: Users }],
-    },
-    { label: "Account", items: [PROFILE] },
-  ],
+export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
+  EMPLOYEE: [TODAY(), selfOnly, ACCOUNT],
+  LEAD: [TODAY(), withTeam, ACCOUNT],
+  MANAGER: [TODAY(), withTeam, ACCOUNT],
 
   ADMIN: [
     TODAY(),
-    {
-      label: "People",
-      items: [
-        { href: "/employees", label: "Employees", icon: Users },
-        { href: "/payroll", label: "Payroll", icon: Wallet },
-      ],
-    },
+    withTeam,
     {
       label: "Organisation",
       items: [
@@ -84,7 +73,7 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/activity", label: "Activity log", icon: ScrollText },
       ],
     },
-    { label: "Account", items: [PROFILE] },
+    ACCOUNT,
   ],
 
   SUPER_ADMIN: [
@@ -104,14 +93,22 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/admin/recycle-bin", label: "Recycle bin", icon: Trash2 },
       ],
     },
-    { label: "Account", items: [PROFILE] },
+    ACCOUNT,
   ],
 };
 
 /**
- * Mobile tab bar. Capped at five — a sixth tab makes every tap target too
- * small to hit reliably one-handed.
+ * Mobile tab bar. Capped at five — a sixth tab makes every target too small
+ * to hit reliably one-handed.
  */
+const TEAM_TABS: NavItem[] = [
+  { ...DASHBOARD, label: "Home" },
+  { ...ATTENDANCE, label: "Time" },
+  LEAVES,
+  { ...ANNOUNCEMENTS, label: "News" },
+  { ...EMPLOYEES, label: "Team" },
+];
+
 export const BOTTOM_NAV_BY_ROLE: Record<Role, NavItem[]> = {
   EMPLOYEE: [
     { ...DASHBOARD, label: "Home" },
@@ -120,19 +117,14 @@ export const BOTTOM_NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { ...ANNOUNCEMENTS, label: "News" },
     PROFILE,
   ],
-  MANAGER: [
-    { ...DASHBOARD, label: "Home" },
-    { ...ATTENDANCE, label: "Time" },
-    LEAVES,
-    { ...ANNOUNCEMENTS, label: "News" },
-    { href: "/employees", label: "Team", icon: Users },
-  ],
+  LEAD: TEAM_TABS,
+  MANAGER: TEAM_TABS,
   ADMIN: [
     { ...DASHBOARD, label: "Home" },
     { ...ATTENDANCE, label: "Time" },
     LEAVES,
-    { href: "/employees", label: "People", icon: Users },
-    { href: "/payroll", label: "Payroll", icon: Wallet },
+    { ...EMPLOYEES, label: "People" },
+    PAYROLL,
   ],
   SUPER_ADMIN: [
     { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -146,7 +138,8 @@ export const BOTTOM_NAV_BY_ROLE: Record<Role, NavItem[]> = {
 export const ROLE_LABEL: Record<Role, string> = {
   SUPER_ADMIN: "Super admin",
   ADMIN: "Admin",
-  MANAGER: "Lead",
+  MANAGER: "Manager",
+  LEAD: "Lead",
   EMPLOYEE: "Employee",
 };
 

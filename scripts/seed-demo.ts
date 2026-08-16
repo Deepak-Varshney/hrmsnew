@@ -41,7 +41,7 @@ function rand() {
 const pick = <T,>(arr: T[]): T => arr[Math.floor(rand() * arr.length)];
 const between = (min: number, max: number) => min + Math.floor(rand() * (max - min + 1));
 
-type Role = "ADMIN" | "MANAGER" | "EMPLOYEE";
+type Role = "ADMIN" | "MANAGER" | "LEAD" | "EMPLOYEE";
 
 interface SeedPerson {
   email: string;
@@ -60,24 +60,24 @@ const PEOPLE: SeedPerson[] = [
   // Leadership
   { email: "admin@gmail.com", firstName: "Aditi", lastName: "Rao", role: "ADMIN", designation: "HR Manager", department: "Human Resources", grade: "L4", monthsAgo: 34 },
 
-  // Engineering
-  { email: "manager@gmail.com", firstName: "Rahul", lastName: "Nair", role: "MANAGER", designation: "Team Lead", department: "Engineering", grade: "L4", reportsToEmail: "admin@gmail.com", monthsAgo: 28 },
-  { email: "employee@gmail.com", firstName: "Priya", lastName: "Sharma", role: "EMPLOYEE", designation: "Senior Developer", department: "Engineering", grade: "L3", reportsToEmail: "manager@gmail.com", monthsAgo: 20 },
-  { email: "employee2@gmail.com", firstName: "Karan", lastName: "Mehta", role: "EMPLOYEE", designation: "Developer", department: "Engineering", grade: "L2", reportsToEmail: "manager@gmail.com", monthsAgo: 14 },
-  { email: "ishaan.gupta@demo.test", firstName: "Ishaan", lastName: "Gupta", role: "EMPLOYEE", designation: "Developer", department: "Engineering", grade: "L2", reportsToEmail: "manager@gmail.com", monthsAgo: 11 },
-  { email: "sneha.goyal@demo.test", firstName: "Sneha", lastName: "Goyal", role: "EMPLOYEE", designation: "Developer", department: "Engineering", grade: "L2", reportsToEmail: "manager@gmail.com", monthsAgo: 9 },
-  { email: "arjun.pillai@demo.test", firstName: "Arjun", lastName: "Pillai", role: "EMPLOYEE", designation: "Associate", department: "Engineering", grade: "L1", reportsToEmail: "manager@gmail.com", monthsAgo: 4, status: "probation" },
-  { email: "meera.iyer@demo.test", firstName: "Meera", lastName: "Iyer", role: "EMPLOYEE", designation: "Associate", department: "Engineering", grade: "L1", reportsToEmail: "manager@gmail.com", monthsAgo: 2, status: "probation" },
+  // Engineering — a manager with a lead under them, so the subtree nests
+  { email: "manager@gmail.com", firstName: "Rahul", lastName: "Nair", role: "MANAGER", designation: "Engineering Manager", department: "Engineering", grade: "L4", reportsToEmail: "admin@gmail.com", monthsAgo: 28 },
+  { email: "lead@gmail.com", firstName: "Sneha", lastName: "Goyal", role: "LEAD", designation: "Team Lead", department: "Engineering", grade: "L3", reportsToEmail: "manager@gmail.com", monthsAgo: 21 },
+  { email: "employee@gmail.com", firstName: "Priya", lastName: "Sharma", role: "EMPLOYEE", designation: "Senior Developer", department: "Engineering", grade: "L3", reportsToEmail: "lead@gmail.com", monthsAgo: 20 },
+  { email: "employee2@gmail.com", firstName: "Karan", lastName: "Mehta", role: "EMPLOYEE", designation: "Developer", department: "Engineering", grade: "L2", reportsToEmail: "lead@gmail.com", monthsAgo: 14 },
+  { email: "ishaan.gupta@demo.test", firstName: "Ishaan", lastName: "Gupta", role: "EMPLOYEE", designation: "Developer", department: "Engineering", grade: "L2", reportsToEmail: "lead@gmail.com", monthsAgo: 11 },
+  { email: "arjun.pillai@demo.test", firstName: "Arjun", lastName: "Pillai", role: "EMPLOYEE", designation: "Associate", department: "Engineering", grade: "L1", reportsToEmail: "lead@gmail.com", monthsAgo: 4, status: "probation" },
+  { email: "meera.iyer@demo.test", firstName: "Meera", lastName: "Iyer", role: "EMPLOYEE", designation: "Associate", department: "Engineering", grade: "L1", reportsToEmail: "lead@gmail.com", monthsAgo: 2, status: "probation" },
 
   // Sales
-  { email: "vikram.singh@demo.test", firstName: "Vikram", lastName: "Singh", role: "MANAGER", designation: "Team Lead", department: "Sales", grade: "L4", reportsToEmail: "admin@gmail.com", monthsAgo: 26 },
+  { email: "vikram.singh@demo.test", firstName: "Vikram", lastName: "Singh", role: "LEAD", designation: "Team Lead", department: "Sales", grade: "L4", reportsToEmail: "admin@gmail.com", monthsAgo: 26 },
   { email: "nisha.patel@demo.test", firstName: "Nisha", lastName: "Patel", role: "EMPLOYEE", designation: "Executive", department: "Sales", grade: "L2", reportsToEmail: "vikram.singh@demo.test", monthsAgo: 17 },
   { email: "rohit.verma@demo.test", firstName: "Rohit", lastName: "Verma", role: "EMPLOYEE", designation: "Executive", department: "Sales", grade: "L2", reportsToEmail: "vikram.singh@demo.test", monthsAgo: 13 },
   { email: "ananya.bose@demo.test", firstName: "Ananya", lastName: "Bose", role: "EMPLOYEE", designation: "Associate", department: "Sales", grade: "L1", reportsToEmail: "vikram.singh@demo.test", monthsAgo: 6 },
   { email: "farhan.khan@demo.test", firstName: "Farhan", lastName: "Khan", role: "EMPLOYEE", designation: "Associate", department: "Sales", grade: "L1", reportsToEmail: "vikram.singh@demo.test", monthsAgo: 3, status: "probation" },
 
   // Finance
-  { email: "deepa.menon@demo.test", firstName: "Deepa", lastName: "Menon", role: "MANAGER", designation: "Team Lead", department: "Finance", grade: "L4", reportsToEmail: "admin@gmail.com", monthsAgo: 30 },
+  { email: "deepa.menon@demo.test", firstName: "Deepa", lastName: "Menon", role: "LEAD", designation: "Team Lead", department: "Finance", grade: "L4", reportsToEmail: "admin@gmail.com", monthsAgo: 30 },
   { email: "sanjay.kulkarni@demo.test", firstName: "Sanjay", lastName: "Kulkarni", role: "EMPLOYEE", designation: "Executive", department: "Finance", grade: "L3", reportsToEmail: "deepa.menon@demo.test", monthsAgo: 22 },
   { email: "tara.joshi@demo.test", firstName: "Tara", lastName: "Joshi", role: "EMPLOYEE", designation: "Executive", department: "Finance", grade: "L2", reportsToEmail: "deepa.menon@demo.test", monthsAgo: 10 },
 
@@ -86,7 +86,7 @@ const PEOPLE: SeedPerson[] = [
   { email: "manish.agarwal@demo.test", firstName: "Manish", lastName: "Agarwal", role: "EMPLOYEE", designation: "Associate", department: "Human Resources", grade: "L1", reportsToEmail: "admin@gmail.com", monthsAgo: 5 },
 
   // Serving notice, and one who has left — so "departed" and "away" are not zero
-  { email: "gaurav.saxena@demo.test", firstName: "Gaurav", lastName: "Saxena", role: "EMPLOYEE", designation: "Developer", department: "Engineering", grade: "L2", reportsToEmail: "manager@gmail.com", monthsAgo: 19, status: "notice-period" },
+  { email: "gaurav.saxena@demo.test", firstName: "Gaurav", lastName: "Saxena", role: "EMPLOYEE", designation: "Developer", department: "Engineering", grade: "L2", reportsToEmail: "lead@gmail.com", monthsAgo: 19, status: "notice-period" },
   { email: "pooja.desai@demo.test", firstName: "Pooja", lastName: "Desai", role: "EMPLOYEE", designation: "Executive", department: "Sales", grade: "L2", reportsToEmail: "vikram.singh@demo.test", monthsAgo: 24, status: "exited" },
 ];
 
@@ -610,17 +610,22 @@ async function main() {
 
     superadmin@gmail.com    Super admin   every organisation
     admin@gmail.com         Admin         whole org, including PII
-    manager@gmail.com       Lead          own team subtree, no PII
+    manager@gmail.com       Manager       own subtree, may modify it
+    lead@gmail.com          Lead          own subtree, read-only on people
     employee@gmail.com      Employee      self only
     employee2@gmail.com     Employee      self only
 
-  Sixteen more employees exist across Engineering, Sales, Finance and HR at
+  Fifteen more employees exist across Engineering, Sales, Finance and HR at
   <first>.<last>@demo.test, same password rule.
 
   Reporting tree:  Aditi (admin)
-                     ├── Rahul (lead)   → 6 engineers
-                     ├── Vikram (lead)  → 4 sales
-                     └── Deepa (lead)   → 2 finance
+                     ├── Rahul (manager)
+                     │     └── Sneha (lead) → 6 engineers
+                     ├── Vikram (lead)      → 4 sales
+                     └── Deepa (lead)       → 2 finance
+
+  The nested manager → lead → employee chain is deliberate: it exercises
+  $graphLookup subtree resolution more than one flat level would.
 
   One person is serving notice and one has left, so "away" and "departed"
   are not zero. Today is deliberately left unmarked so the check-in card
