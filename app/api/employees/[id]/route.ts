@@ -1,159 +1,209 @@
 // app/api/employees/[id]/route.ts
+//
+// `id` is an Employee._id. For backwards compatibility with the legacy UI it
+// also accepts a User._id — see findEmployeeByEitherId, which is marked
+// deprecated and should be removed once the frontend is updated.
+
 import { NextResponse } from "next/server";
-import { requireHR } from "@/lib/requireRole";
-import { connect } from "@/lib/mongoose";
-import User from "@/model/User";
+
+import { withContext } from "@/lib/withContext";
+import {
+  can,
+  isWithinScope,
+  serializeEmployee,
+  ForbiddenError,
+} from "@/lib/rbac";
+import {
+  SELF_EDITABLE_EMPLOYEE_FIELDS,
+  APPROVAL_REQUIRED_EMPLOYEE_FIELDS,
+} from "@/lib/rbac/permissions";
+import { getContext } from "@/lib/context";
 import Employee from "@/model/Employee";
-import AuditLog from "@/model/AuditLog";
-import { hashPassword } from "@/lib/auth";
+import EmploymentHistory from "@/model/EmploymentHistory";
+import {
+  assertEmployeeDeletable,
+  assertNoReportingCycle,
+  findEmployeeByEitherId,
+  recordEmploymentChanges,
+  ValidationError,
+} from "@/lib/services/employee";
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
+/** Fields an ADMIN may set. MANAGER and EMPLOYEE are narrowed further below. */
+const ADMIN_WRITABLE = new Set([
+  "firstName",
+  "middleName",
+  "lastName",
+  "dateOfBirth",
+  "gender",
+  "bloodGroup",
+  "maritalStatus",
+  "photo",
+  "contact",
+  "emergencyContacts",
+  "statutory",
+  "bank",
+  "employment",
+  "departmentId",
+  "designationId",
+  "locationId",
+  "gradeId",
+  "costCenter",
+  "reportsTo",
+  "dottedLineManagerId",
+  "exit",
+  "education",
+  "previousEmployment",
+  "family",
+  "skills",
+  "certifications",
+  "customFields",
+]);
+
+/** A manager may correct their reportees' basics, not their pay or identity. */
+const MANAGER_WRITABLE = new Set([
+  "contact",
+  "emergencyContacts",
+  "skills",
+  "certifications",
+  "photo",
+]);
+
+function writableFieldsFor(role: string | null, isSuperAdmin: boolean): Set<string> {
+  if (isSuperAdmin || role === "ADMIN") return ADMIN_WRITABLE;
+  if (role === "MANAGER") return MANAGER_WRITABLE;
+  return SELF_EDITABLE_EMPLOYEE_FIELDS;
+}
+
+export const GET = withContext<{ id: string }>(
+  async (_req, { params }) => {
     const { id } = await params;
-    const { user } = await requireHR(req);
-    await connect();
 
-    const userData = await User.findById(id).lean();
-    if (!userData) {
+    const employee = await findEmployeeByEitherId(id);
+    if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
-    const employeeData = await Employee.findOne({ userId: id })
-      .populate("managerId", "name email")
+    const scope = can("employee.read");
+    if (!(await isWithinScope(scope, String(employee._id)))) {
+      // 404 rather than 403 — don't confirm that an out-of-scope employee exists.
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
+
+    await employee.populate([
+      { path: "departmentId", select: "name code" },
+      { path: "designationId", select: "title code" },
+      { path: "locationId", select: "name code" },
+      { path: "gradeId", select: "name level" },
+      { path: "reportsTo", select: "displayName employeeCode" },
+    ]);
+
+    const history = await EmploymentHistory.find({ employeeId: employee._id })
+      .sort({ effectiveFrom: -1 })
+      .limit(50)
       .lean();
 
     return NextResponse.json({
-      employee: {
-        ...userData,
-        employee: employeeData,
-      },
+      employee: serializeEmployee(employee),
+      history,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Unauthorized" }, { status: 401 });
-  }
-}
+  },
+  { permission: "employee.read" }
+);
 
-export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { user } = await requireHR(req);
-    await connect();
+export const PUT = withContext<{ id: string }>(
+  async (req, { params }) => {
     const { id } = await params;
+    const ctx = getContext()!;
 
-    const {
-      name,
-      email,
-      password,
-      role,
-      isActive,
-      employeeCode,
-      department,
-      designation,
-      managerId,
-      joiningDate,
-      phone,
-      address,
-      emergencyContact,
-    } = await req.json();
-
-    const existingUser = await User.findById(id);
-    if (!existingUser) {
-      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
-    }
-
-    // Store old values for audit
-    const oldValues = {
-      name: existingUser.name,
-      email: existingUser.email,
-      role: existingUser.role,
-      isActive: existingUser.isActive,
-    };
-
-    // Update user
-    if (name) existingUser.name = name;
-    if (email) existingUser.email = email;
-    if (role) existingUser.role = role;
-    if (isActive !== undefined) existingUser.isActive = isActive;
-    // Update password if provided
-    if (password) {
-      existingUser.passwordHash = await hashPassword(password);
-    }
-    await existingUser.save();
-
-    // Update or create employee record
-    let employee = await Employee.findOne({ userId: id });
+    const employee = await findEmployeeByEitherId(id);
     if (!employee) {
-      employee = await Employee.create({ userId: id });
-    }
-
-    if (employeeCode !== undefined) employee.employeeCode = employeeCode;
-    if (department !== undefined) employee.department = department;
-    if (designation !== undefined) employee.designation = designation;
-    if (managerId !== undefined) employee.managerId = managerId;
-    if (joiningDate !== undefined) employee.joiningDate = new Date(joiningDate);
-    if (phone !== undefined) employee.phone = phone;
-    if (address !== undefined) employee.address = address;
-    if (emergencyContact !== undefined) employee.emergencyContact = emergencyContact;
-    await employee.save();
-
-    // Log audit
-    await AuditLog.create({
-      action: "employee_update",
-      userId: (user as any)._id,
-      targetUserId: id,
-      entityType: "User",
-      entityId: id,
-      oldValue: oldValues,
-      newValue: {
-        name: existingUser.name,
-        email: existingUser.email,
-        role: existingUser.role,
-        isActive: existingUser.isActive,
-      },
-      remarks: `Employee updated by ${(user as any).name}`,
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: "Employee updated successfully",
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { user } = await requireHR(req);
-    await connect();
-    const { id } = await params;
-
-    const existingUser = await User.findById(id);
-    if (!existingUser) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
-    // Deactivate instead of delete
-    existingUser.isActive = false;
-    await existingUser.save();
+    const scope = can("employee.update");
+    if (!(await isWithinScope(scope, String(employee._id)))) {
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
 
-    // Log audit
-    await AuditLog.create({
-      action: "employee_deactivate",
-      userId: (user as any)._id,
-      targetUserId: id,
-      entityType: "User",
-      entityId: id,
-      oldValue: { isActive: true },
-      newValue: { isActive: false },
-      remarks: `Employee deactivated by ${(user as any).name}`,
-    });
+    const body = (await req.json()) ?? {};
+    const writable = writableFieldsFor(ctx.role, ctx.isSuperAdmin);
+
+    const rejected: string[] = [];
+    const needsApproval: string[] = [];
+
+    // Snapshot before mutating, so EmploymentHistory can diff against it.
+    const before = employee.toObject();
+
+    for (const [key, value] of Object.entries(body)) {
+      if (!writable.has(key)) {
+        // An employee editing their own restricted fields gets told to raise a
+        // change request rather than a flat rejection.
+        if (
+          scope === "self" &&
+          APPROVAL_REQUIRED_EMPLOYEE_FIELDS.has(key)
+        ) {
+          needsApproval.push(key);
+        } else {
+          rejected.push(key);
+        }
+        continue;
+      }
+
+      if (key === "reportsTo") {
+        await assertNoReportingCycle(String(employee._id), value as string | null);
+      }
+
+      (employee as any).set(key, value);
+    }
+
+    if (needsApproval.length > 0) {
+      throw new ForbiddenError(
+        "employee.update",
+        `These fields require HR approval: ${needsApproval.join(", ")}. Submit a change request.`
+      );
+    }
+
+    await employee.save();
+    await recordEmploymentChanges(before, employee.toObject(), body.__reason);
 
     return NextResponse.json({
       success: true,
-      message: "Employee deactivated successfully",
+      employee: serializeEmployee(employee),
+      ...(rejected.length > 0 ? { ignoredFields: rejected } : {}),
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
-  }
-}
+  },
+  { permission: "employee.update" }
+);
 
+export const DELETE = withContext<{ id: string }>(
+  async (req, { params }) => {
+    const { id } = await params;
+
+    const employee = await findEmployeeByEitherId(id);
+    if (!employee) {
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
+
+    const scope = can("employee.delete");
+    if (!(await isWithinScope(scope, String(employee._id)))) {
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
+
+    // Blocks rather than cascades: reportees and held assets must be dealt
+    // with deliberately.
+    await assertEmployeeDeletable(String(employee._id));
+
+    const url = new URL(req.url);
+    const reason = url.searchParams.get("reason") ?? undefined;
+
+    // Soft delete. Recoverable from the recycle bin by Super Admin (or by an
+    // admin, if the org has opted in).
+    await (employee as any).softDelete(reason);
+
+    return NextResponse.json({
+      success: true,
+      message: "Employee deleted. Recoverable from the recycle bin.",
+    });
+  },
+  { permission: "employee.delete" }
+);

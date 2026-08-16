@@ -191,26 +191,57 @@ inconsistency and check which side of the line a file is on.
 
 `npm run typecheck` passes.
 
-### Next — wiring the foundation in
+### Done — wiring (Phase 0b)
 
-Nothing below is done yet, and until it is, **the existing API routes still
-run on the legacy single-tenant path**.
+| Area | Files |
+|---|---|
+| Route context | `lib/withContext.ts` — `withContext()` for handlers, `withCronAuth()` for scheduled jobs |
+| Employee services | `lib/services/employee.ts` — code generation, reporting-cycle guard, delete guards, history recording |
+| Migration | `scripts/migrate-to-multi-tenant.ts`, `npm run migrate:multi-tenant -- --dry-run` |
+| Retrofitted routes | `app/api/employees/route.ts`, `app/api/employees/[id]/route.ts` |
 
-1. **Context middleware** — a `withRequestContext(req, handler)` wrapper that
-   resolves session → super admin short-circuit → org slug → Membership →
-   populates `lib/context`. Every route handler needs wrapping. Note
-   AsyncLocalStorage needs the Node runtime, so this cannot live in Next.js
-   middleware (Edge by default).
-2. **Migration script** — backfill: create a default Organization from
-   existing data, a Membership per User (mapping legacy `role`:
-   `HR`/`Admin` → `ADMIN`, `Manager` → `MANAGER`, `Employee` → `EMPLOYEE`),
-   set `orgId` on every existing document, and populate `Employee.reportsTo`
-   from the legacy `managerId` (which points at `User`, not `Employee`).
-3. **Retrofit existing routes** — all ~30 handlers under `app/api/` still use
-   `requireHR`/`requireAdmin` and have no org scoping.
-4. Route restructure to `/[orgSlug]/...` + `/admin/...` (super admin console).
-5. Recycle bin + purge (`lib/db/purge.ts` — must snapshot to ActivityLog
+`npm run typecheck` and `npm run build` both pass.
+
+### Route conventions — follow this shape
+
+```ts
+export const GET = withContext(async (req, { params }) => {
+  const scope  = can("employee.read");                 // platform|org|team|self
+  const filter = await employeeFilterForScope(scope);  // → Mongo filter
+  const rows   = await Employee.find(filter);          // orgId auto-injected
+  return NextResponse.json({ employees: serializeEmployees(rows) });
+}, { permission: "employee.read" });
+```
+
+- `withContext` resolves the org from, in order: `orgSlug` route param →
+  `x-org-slug` header → `?org=` query → the user's only membership. That last
+  fallback is what keeps the current flat routes working mid-migration.
+- Assert the permission via the `permission` option, then narrow rows with the
+  returned scope. Out-of-scope records return **404, not 403** — a 403 confirms
+  the record exists.
+- Never return a raw employee. Always `serializeEmployee()`.
+- Throw `ValidationError` / `ConflictError` / `ForbiddenError`; `withContext`
+  maps them to 400 / 409 / 403 and everything else to a generic 500.
+
+### Next
+
+1. **Run the migration** — `npm run migrate:multi-tenant -- --dry-run` first.
+   Until it runs, no existing document has an `orgId` and the retrofitted
+   employee routes will return nothing.
+2. **Retrofit the remaining ~28 routes** under `app/api/` — attendance, leave,
+   team, reports, policies, announcements, settings, audit, me. All still use
+   `requireHR`/`requireAdmin` and are unscoped.
+3. **Apply `tenantModel` to the legacy models** — Attendance, Leave,
+   LeaveBalance, Policy, Announcement, Regularisation, Settings. Deliberately
+   *not* done yet: adding the plugin before a model's routes are wrapped in
+   `withContext` would break them, since queries would filter on an orgId that
+   is not in context. Do it per-model, alongside its routes.
+4. **Update the frontend** to send Employee ids rather than User ids, then
+   delete the `findEmployeeByEitherId` fallback.
+5. Route restructure to `/[orgSlug]/...` + `/admin/...` (super admin console).
+6. Recycle bin + purge (`lib/db/purge.ts` — must snapshot to ActivityLog
    before destroying).
+7. Replace `model/AuditLog.ts` reads with `ActivityLog`, then retire it.
 
 ### Legacy — needs migrating, do not extend
 - `model/User.ts` — has `role: Employee|Manager|HR|Admin` inline. Role moves

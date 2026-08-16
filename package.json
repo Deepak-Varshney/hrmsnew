@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "seed:admin": "node scripts/seed-admin.js",
-    "seed:super-admin": "tsx scripts/seed-super-admin.ts"
+    "seed:super-admin": "tsx scripts/seed-super-admin.ts",
+    "migrate:multi-tenant": "tsx scripts/migrate-to-multi-tenant.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
