@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 
 import { withContext } from "@/lib/withContext";
 import { requireOrgId } from "@/lib/context";
-import { can, employeeFilterForScope, serializeEmployees } from "@/lib/rbac";
+import { listEmployees } from "@/lib/services/employeeQueries";
 import Employee from "@/model/Employee";
 import User from "@/model/User";
 import Membership from "@/model/Membership";
@@ -27,46 +27,16 @@ import {
 export const GET = withContext(
   async (req) => {
     const url = new URL(req.url);
-    const search = url.searchParams.get("search")?.trim();
-    const departmentId = url.searchParams.get("departmentId");
-    const locationId = url.searchParams.get("locationId");
-    const status = url.searchParams.get("status");
-    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
-    const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 50)));
-
-    const scope = can("employee.read");
-    const filter: Record<string, any> = await employeeFilterForScope(scope);
-
-    if (departmentId) filter.departmentId = departmentId;
-    if (locationId) filter.locationId = locationId;
-    if (status) filter["employment.status"] = status;
-    if (search) {
-      filter.$or = [
-        { displayName: { $regex: search, $options: "i" } },
-        { employeeCode: { $regex: search, $options: "i" } },
-        { "contact.workEmail": { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const [rows, total] = await Promise.all([
-      Employee.find(filter)
-        // PII is never needed for a list; excluding it here means it cannot
-        // leak even if a caller forgets to serialize.
-        .select("-statutory -bank")
-        .populate("departmentId", "name code")
-        .populate("designationId", "title code")
-        .populate("locationId", "name code")
-        .populate("reportsTo", "displayName employeeCode")
-        .sort({ displayName: 1 })
-        .skip((page - 1) * limit)
-        .limit(limit),
-      Employee.countDocuments(filter),
-    ]);
-
-    return NextResponse.json({
-      employees: serializeEmployees(rows),
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    const result = await listEmployees({
+      search: url.searchParams.get("search")?.trim() ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+      departmentId: url.searchParams.get("departmentId") ?? undefined,
+      locationId: url.searchParams.get("locationId") ?? undefined,
+      page: Number(url.searchParams.get("page") ?? 1),
+      limit: Number(url.searchParams.get("limit") ?? 50),
     });
+
+    return NextResponse.json(result);
   },
   { permission: "employee.read" }
 );

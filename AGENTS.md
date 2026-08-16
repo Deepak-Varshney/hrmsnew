@@ -202,6 +202,44 @@ inconsistency and check which side of the line a file is on.
 
 `npm run typecheck` and `npm run build` both pass.
 
+### Data fetching — server components first
+
+Auth lives in an **httpOnly cookie** (`hrms_session`), not just localStorage,
+because server components cannot read localStorage. The bearer header still
+works, so existing client fetches keep functioning.
+
+Pages load their own data in-process. Do not fetch our own API over HTTP from
+a server component:
+
+```tsx
+// app/employees/page.tsx — server component
+export default async function Page({ searchParams }) {
+  const params = await searchParams;                  // Next 16: a Promise
+  const { session, data } = await loadWithSession(async () => {
+    return { list: await listEmployees({ search: params.search }) };
+  });
+  return (
+    <AppShell session={plain(session)}>
+      <EmployeesClient employees={plain(data.list.employees)} />
+    </AppShell>
+  );
+}
+```
+
+- `loadWithSession` / `withServerContext` (`lib/session.ts`) establish tenant
+  context from the cookie, so models, plugins, and RBAC behave exactly as they
+  do inside a route handler.
+- **Query logic lives in `lib/services/*Queries.ts`**, called by both the page
+  and its API route. Duplicating the query is how a page and its API drift into
+  showing different rows.
+- Mongoose documents carry ObjectIds and Dates, which cannot cross the RSC
+  boundary — pass them through a `plain()` JSON round-trip.
+- **Filters belong in the URL**, not component state, so the server re-renders
+  and a filtered view can be linked to.
+- `AppShell` is presentational and takes `session` as a prop. It does not
+  fetch. An earlier version fetched `/api/me` and signed the user out on *any*
+  failed response, so a transient 500 read as an expired session.
+
 ### Route conventions — follow this shape
 
 ```ts

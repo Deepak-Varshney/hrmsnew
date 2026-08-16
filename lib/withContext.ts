@@ -14,7 +14,7 @@
 
 import { NextResponse } from "next/server";
 import { connect } from "@/lib/mongoose";
-import { verifyTokenAndSession } from "@/lib/auth";
+import { SESSION_COOKIE, verifyTokenAndSession } from "@/lib/auth";
 import { runWithContext, type Role, type RequestContext } from "@/lib/context";
 import {
   assertCan,
@@ -49,6 +49,27 @@ function bearerToken(req: Request): string | null {
   const [scheme, token] = header.split(" ");
   if (!token || scheme.toLowerCase() !== "bearer") return null;
   return token;
+}
+
+function cookieToken(req: Request): string | null {
+  const raw = req.headers.get("cookie");
+  if (!raw) return null;
+
+  for (const part of raw.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === SESSION_COOKIE) return decodeURIComponent(rest.join("="));
+  }
+  return null;
+}
+
+/**
+ * Bearer header first, then the session cookie.
+ *
+ * Both are supported because server-rendered navigation carries the cookie
+ * while existing client fetches still send the header.
+ */
+function sessionToken(req: Request): string | null {
+  return bearerToken(req) ?? cookieToken(req);
 }
 
 function clientIp(req: Request): string | undefined {
@@ -155,8 +176,8 @@ export function withContext<P extends RouteParams = RouteParams>(
 
       const params = ((routeCtx?.params ? await routeCtx.params : {}) ?? {}) as P;
 
-      const token = bearerToken(req);
-      if (!token) throw new UnauthenticatedError("Missing bearer token");
+      const token = sessionToken(req);
+      if (!token) throw new UnauthenticatedError("Not signed in");
 
       const { user } = await verifyTokenAndSession(token);
       const u = user as any;

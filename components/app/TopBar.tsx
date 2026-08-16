@@ -27,9 +27,13 @@ export function TopBar({ orgName, role, userName }: TopBarProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  function signOut() {
+  async function signOut() {
+    // The cookie is httpOnly, so only the server can clear it. This also
+    // deactivates the Session record, revoking the token everywhere.
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     localStorage.removeItem("token");
-    router.push("/auth/login");
+    router.replace("/auth/login");
+    router.refresh();
   }
 
   return (
