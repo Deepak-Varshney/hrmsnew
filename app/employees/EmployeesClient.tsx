@@ -59,6 +59,10 @@ function describeScope(role: string, orgName: string | null) {
       return "Everyone on the roll, including people who have left.";
     case "MANAGER":
       return "You and the people reporting to you.";
+    case "LEAD":
+      // Leads can see their team but not change it — state the boundary
+      // rather than leaving them to discover it by finding no edit button.
+      return "You and the people reporting to you — read-only.";
     default:
       return "Your own record.";
   }

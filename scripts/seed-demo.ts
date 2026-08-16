@@ -29,6 +29,16 @@ import Designation from "../model/Designation";
 import Location from "../model/Location";
 import Grade from "../model/Grade";
 import EmploymentHistory from "../model/EmploymentHistory";
+import StatutoryConfig from "../model/StatutoryConfig";
+import SalaryStructure from "../model/SalaryStructure";
+import PayrollRun from "../model/PayrollRun";
+import Payslip from "../model/Payslip";
+import {
+  amountInWords,
+  buildPayslip,
+  financialYearFor,
+  monthKey,
+} from "../lib/services/payroll";
 
 const RESET = process.argv.includes("--reset");
 
@@ -600,6 +610,209 @@ async function main() {
       );
 
       log("content", `${ANNOUNCEMENTS.length} announcements · ${POLICIES.length} policies`);
+
+      // --- Payroll --------------------------------------------------------
+      const fy = financialYearFor(today);
+
+      // ⚠ Slabs below are illustrative and NOT CA-verified. Check them
+      // against the current Finance Act before any real payroll run.
+      let config = await StatutoryConfig.findOne({ financialYear: fy });
+      if (!config) {
+        config = await StatutoryConfig.create({
+          orgId,
+          financialYear: fy,
+          professionalTax: {
+            enabled: true,
+            state: "Karnataka",
+            // Karnataka: nil below ₹25,000 a month, ₹200 at or above.
+            slabs: [
+              { from: 0, to: 24_999_00, amount: 0 },
+              { from: 25_000_00, to: null, amount: 200_00 },
+            ],
+            annualCap: 2_500_00,
+          },
+          incomeTax: {
+            defaultRegime: "new",
+            standardDeductionNew: 75_000_00,
+            standardDeductionOld: 50_000_00,
+            newRegimeSlabs: [
+              { from: 0, to: 4_00_000_00, rate: 0 },
+              { from: 4_00_000_00, to: 8_00_000_00, rate: 5 },
+              { from: 8_00_000_00, to: 12_00_000_00, rate: 10 },
+              { from: 12_00_000_00, to: 16_00_000_00, rate: 15 },
+              { from: 16_00_000_00, to: 20_00_000_00, rate: 20 },
+              { from: 20_00_000_00, to: 24_00_000_00, rate: 25 },
+              { from: 24_00_000_00, to: null, rate: 30 },
+            ],
+            oldRegimeSlabs: [
+              { from: 0, to: 2_50_000_00, rate: 0 },
+              { from: 2_50_000_00, to: 5_00_000_00, rate: 5 },
+              { from: 5_00_000_00, to: 10_00_000_00, rate: 20 },
+              { from: 10_00_000_00, to: null, rate: 30 },
+            ],
+            cessRate: 4,
+          },
+        });
+      }
+      log("statutory", `FY ${fy} config (PF, ESI, PT Karnataka, TDS)`);
+
+      // Monthly gross by grade, in paise.
+      const GROSS_BY_GRADE: Record<string, number> = {
+        L1: 32_000_00,
+        L2: 58_000_00,
+        L3: 95_000_00,
+        L4: 1_60_000_00,
+      };
+
+      const structureByEmployee = new Map<string, any>();
+
+      for (const person of activeUsers) {
+        const employee = employeeByEmail.get(person.email);
+        if (!employee) continue;
+
+        const gross = GROSS_BY_GRADE[person.grade] ?? 40_000_00;
+
+        // A conventional Indian breakup: basic 40% of gross, HRA half of
+        // basic, a fixed conveyance allowance, remainder as special allowance.
+        const basic = Math.round(gross * 0.4);
+        const hra = Math.round(basic * 0.5);
+        const conveyance = 1_600_00;
+        const special = gross - basic - hra - conveyance;
+
+        const components = [
+          { code: "BASIC", name: "Basic", type: "earning" as const, monthly: basic, partOfCtc: true, taxable: true, isStatutory: false },
+          { code: "HRA", name: "House Rent Allowance", type: "earning" as const, monthly: hra, partOfCtc: true, taxable: true, isStatutory: false },
+          { code: "CONVEYANCE", name: "Conveyance Allowance", type: "earning" as const, monthly: conveyance, partOfCtc: true, taxable: true, isStatutory: false },
+          { code: "SPECIAL", name: "Special Allowance", type: "earning" as const, monthly: special, partOfCtc: true, taxable: true, isStatutory: false },
+        ];
+
+        const effectiveFrom = new Date();
+        effectiveFrom.setMonth(effectiveFrom.getMonth() - person.monthsAgo);
+
+        let structure = await SalaryStructure.findOne({ employeeId: employee._id });
+        if (!structure) {
+          structure = await SalaryStructure.create({
+            orgId,
+            employeeId: employee._id,
+            annualCtc: gross * 12,
+            monthlyGross: gross,
+            components,
+            effectiveFrom,
+            effectiveTo: null,
+          });
+        }
+        structureByEmployee.set(person.email, structure);
+      }
+
+      log("salary", `${structureByEmployee.size} salary structures`);
+
+      // Payroll runs for the last three completed months.
+      const attendanceByUserMonth = new Map<string, { present: number; absent: number }>();
+      for (const row of attendanceRows) {
+        const key = `${row.userId}:${row.date.slice(0, 7)}`;
+        const entry = attendanceByUserMonth.get(key) ?? { present: 0, absent: 0 };
+        if (row.status === "Absent") entry.absent += 1;
+        else entry.present += 1;
+        attendanceByUserMonth.set(key, entry);
+      }
+
+      let runCount = 0;
+      let payslipCount = 0;
+
+      for (let back = 1; back <= 3; back++) {
+        const monthDate = new Date(today.getFullYear(), today.getMonth() - back, 1);
+        const month = monthKey(monthDate);
+
+        if (await PayrollRun.findOne({ month })) continue;
+
+        const run = await PayrollRun.create({
+          orgId,
+          month,
+          financialYear: financialYearFor(monthDate),
+          status: "paid",
+          computedAt: new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1),
+          approvedAt: new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 2),
+          paidAt: new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 3),
+        });
+
+        const totals = {
+          grossEarnings: 0,
+          totalDeductions: 0,
+          netPayable: 0,
+          employerCost: 0,
+          employeeCount: 0,
+          payslipCount: 0,
+        };
+
+        for (const person of activeUsers) {
+          const employee = employeeByEmail.get(person.email);
+          const structure = structureByEmployee.get(person.email);
+          const user = userByEmail.get(person.email);
+          if (!employee || !structure) continue;
+
+          const joined = new Date();
+          joined.setMonth(joined.getMonth() - person.monthsAgo);
+          if (joined > monthDate) continue; // not employed that month
+
+          const stats = attendanceByUserMonth.get(`${user._id}:${month}`) ?? {
+            present: 22,
+            absent: 0,
+          };
+          const workingDays = stats.present + stats.absent || 22;
+
+          const computed = buildPayslip({
+            structure: structure.toObject ? structure.toObject() : structure,
+            attendance: {
+              workingDays,
+              paidDays: stats.present,
+              lopDays: stats.absent,
+              leaveDays: 0,
+            },
+            config: config.toObject ? (config.toObject() as any) : (config as any),
+          });
+
+          await Payslip.create({
+            orgId,
+            payrollRunId: run._id,
+            employeeId: employee._id,
+            month,
+            financialYear: run.financialYear,
+            snapshot: {
+              employeeCode: employee.employeeCode,
+              displayName: employee.displayName,
+              designation: person.designation,
+              department: person.department,
+              location: "Bengaluru HQ",
+              dateOfJoining: employee.employment.dateOfJoining,
+              pan: null,
+              uan: null,
+              bankName: "HDFC Bank",
+              bankAccountTail: String(between(1000, 9999)),
+            },
+            attendance: {
+              workingDays,
+              paidDays: stats.present,
+              lopDays: stats.absent,
+              leaveDays: 0,
+            },
+            ...computed,
+          });
+
+          totals.grossEarnings += computed.grossEarnings;
+          totals.totalDeductions += computed.totalDeductions;
+          totals.netPayable += computed.netPay;
+          totals.employerCost += computed.employerCost;
+          totals.employeeCount += 1;
+          totals.payslipCount += 1;
+          payslipCount += 1;
+        }
+
+        run.totals = totals;
+        await run.save();
+        runCount += 1;
+      }
+
+      log("payroll", `${runCount} monthly runs · ${payslipCount} payslips`);
     }
   );
 

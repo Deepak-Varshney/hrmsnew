@@ -48,6 +48,10 @@ export type Permission =
   | "leave.read"
   | "leave.approve"
   | "leave.configure"
+  // Payroll
+  | "payroll.read"
+  | "payroll.run"
+  | "payroll.approve"
   // Audit & recovery
   | "activity.read"
   | "recyclebin.read"
@@ -104,6 +108,10 @@ const ROLE_PERMISSIONS: Record<Exclude<Role, "SUPER_ADMIN">, PermissionMap> = {
     "leave.approve": "org",
     "leave.configure": "org",
 
+    "payroll.read": "org",
+    "payroll.run": "org",
+    "payroll.approve": "org",
+
     "activity.read": "org",
     "recyclebin.read": "org",
     // Restore and purge are deliberately absent — Super Admin only.
@@ -141,6 +149,10 @@ const ROLE_PERMISSIONS: Record<Exclude<Role, "SUPER_ADMIN">, PermissionMap> = {
     "leave.read": "team",
     "leave.approve": "team",
 
+    // Read-only: leads and managers see their team's payslips but never
+    // run or approve payroll. That stays with ADMIN.
+    "payroll.read": "team",
+
     "activity.read": "team",
   },
 
@@ -172,6 +184,8 @@ const ROLE_PERMISSIONS: Record<Exclude<Role, "SUPER_ADMIN">, PermissionMap> = {
     "leave.read": "team",
     "leave.approve": "team",
 
+    "payroll.read": "team",
+
     "activity.read": "team",
   },
 
@@ -194,6 +208,8 @@ const ROLE_PERMISSIONS: Record<Exclude<Role, "SUPER_ADMIN">, PermissionMap> = {
 
     "leave.request": "self",
     "leave.read": "self",
+
+    "payroll.read": "self",
 
     "activity.read": "self",
   },
