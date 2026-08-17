@@ -107,6 +107,26 @@ A Developer can be a MANAGER; a Sr. Developer can be an EMPLOYEE.
 Team subtree is resolved with `$graphLookup` on `reportsTo` and cached per
 request in the tenant context.
 
+### Admin mode (super admin)
+
+A super admin normally runs with `orgId: null`, which lifts tenant scoping.
+**Admin mode** pins them to one org so every ordinary page behaves exactly as
+it does for that org's admin. See `lib/actingOrg.ts`.
+
+- The choice is an httpOnly cookie (`hrms_acting_org`, holding the org slug),
+  read by **both** `lib/session.ts` (server components) and
+  `lib/withContext.ts` (route handlers). Change one, change the other.
+- `isSuperAdmin` stays `true` while acting — no power is lost. Only
+  `session.role` becomes `ADMIN`, which is what drives the nav and page UI.
+- Anything that must stay platform-wide has to say so: `platformQueries.ts`
+  and `lib/db/purge.ts` wrap their reads in `runUnscoped`, because in admin
+  mode `orgId` is set and would otherwise scope the console to one tenant.
+- Entering and leaving are logged as `critical` (`admin.mode.entered` /
+  `admin.mode.left`).
+
+Entry points: the org switcher in the top bar, and the **Admin mode** button
+on each row of `/admin/orgs`.
+
 ---
 
 ## Non-negotiable conventions
@@ -320,6 +340,13 @@ Anthropic SDKs.
   currently used with **npm**. Pick one and delete the other.
 - `scripts/` has both `seed-admin.js` and `seed-admin.ts`. The `package.json`
   script points at the `.js`.
+- The soft-delete plugin hooks `deleteOne` as **query** middleware and injects
+  `deletedAt: null`. A genuine hard delete must call `.withDeleted()` or it
+  silently matches nothing. `lib/db/purge.ts` is the only place that does this.
+- The recycle-bin label and the purge confirmation string must be the same
+  text — both come from `lib/db/recordLabel.ts`. If they diverge, typing what
+  the screen shows is rejected forever.
+- Scripts need the env explicitly: `npx tsx --env-file=.env scripts/…`.
 
 ---
 
