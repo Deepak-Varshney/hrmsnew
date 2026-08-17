@@ -65,7 +65,27 @@ export interface RequestContext {
   impersonatedBy?: { userId: string; userEmail: string };
 }
 
-const storage = new AsyncLocalStorage<RequestContext>();
+/**
+ * Pinned on globalThis, not held in a module-level const.
+ *
+ * Next.js can evaluate the same module more than once — separate server
+ * chunks, HMR in dev — and each evaluation would otherwise construct its own
+ * AsyncLocalStorage. The writer (withContext) and the reader (the Mongoose
+ * plugins) would then be talking to different stores: getContext() returns
+ * undefined inside the plugin, tenantScope silently declines to add orgId, and
+ * every tenant reads every other tenant's rows. It fails open, it produces no
+ * error, and whether it happens at all depends on module compile order.
+ *
+ * One store per process is the only thing that makes the guarantee hold.
+ */
+const globalForContext = globalThis as unknown as {
+  __hrmsRequestContext?: AsyncLocalStorage<RequestContext>;
+};
+
+const storage =
+  globalForContext.__hrmsRequestContext ??
+  (globalForContext.__hrmsRequestContext =
+    new AsyncLocalStorage<RequestContext>());
 
 /** Current context, or undefined outside a context scope. */
 export function getContext(): RequestContext | undefined {
@@ -77,7 +97,7 @@ export function requireContext(): RequestContext {
   const ctx = storage.getStore();
   if (!ctx) {
     throw new Error(
-      "No request context. Wrap the call in runWithContext() or runAsSystem()."
+      "No request context. Wrap the call in runWithContext() or runAsSystem().",
     );
   }
   return ctx;
@@ -93,9 +113,17 @@ export function requireOrgId(): string {
 }
 
 export function runWithContext<T>(
-  ctx: Omit<RequestContext, "bypassTenantScope" | "suppressActivityLog" | "teamIds"> &
-    Partial<Pick<RequestContext, "bypassTenantScope" | "suppressActivityLog" | "teamIds">>,
-  fn: () => Promise<T> | T
+  ctx: Omit<
+    RequestContext,
+    "bypassTenantScope" | "suppressActivityLog" | "teamIds"
+  > &
+    Partial<
+      Pick<
+        RequestContext,
+        "bypassTenantScope" | "suppressActivityLog" | "teamIds"
+      >
+    >,
+  fn: () => Promise<T> | T,
 ): Promise<T> | T {
   return storage.run(
     {
@@ -104,7 +132,7 @@ export function runWithContext<T>(
       suppressActivityLog: false,
       ...ctx,
     },
-    fn
+    fn,
   );
 }
 
@@ -126,7 +154,7 @@ export function runAsSystem<T>(fn: () => Promise<T> | T): Promise<T> | T {
       bypassTenantScope: true,
       suppressActivityLog: true,
     },
-    fn
+    fn,
   );
 }
 
@@ -140,7 +168,10 @@ export function runUnscoped<T>(fn: () => Promise<T> | T): Promise<T> | T {
 }
 
 /** Narrow the current context to a specific org (super admin drill-down). */
-export function runInOrg<T>(orgId: string, fn: () => Promise<T> | T): Promise<T> | T {
+export function runInOrg<T>(
+  orgId: string,
+  fn: () => Promise<T> | T,
+): Promise<T> | T {
   const current = requireContext();
   return storage.run({ ...current, orgId, teamIds: null }, fn);
 }

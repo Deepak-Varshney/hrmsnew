@@ -186,6 +186,27 @@ in the org's IANA timezone.
 
 ---
 
+## Development data
+
+```bash
+npx tsx --env-file=.env scripts/seed-platform.ts --reset
+```
+
+Four tenants — Demo Company (Karnataka), Northwind Logistics (Maharashtra),
+Saffron Retail (Rajasthan), Kaveri Health (Tamil Nadu) — 70 employees, three
+months of attendance, leave, payroll runs and payslips. Every password equals
+the account's email.
+
+**Always develop against more than one tenant.** A missing `orgId` filter reads
+perfectly with a single org and only becomes visible when a second one exists;
+that is how the `globalThis` context bug below was found. The four states also
+mean professional tax and LWF genuinely differ per org — Rajasthan levies no PT
+at all — so per-org statutory config is exercised rather than assumed.
+
+`scripts/seed-demo.ts` still seeds a single org and is kept for quick runs.
+
+---
+
 ## Migration status
 
 This repo is mid-retrofit from single-tenant to multi-tenant. Expect
@@ -340,6 +361,14 @@ Anthropic SDKs.
   currently used with **npm**. Pick one and delete the other.
 - `scripts/` has both `seed-admin.js` and `seed-admin.ts`. The `package.json`
   script points at the `.js`.
+- **The request-context AsyncLocalStorage is pinned on `globalThis`. Leave it
+  there.** As a module-level `const` it worked in scripts and failed in the dev
+  server: Next.js evaluated `lib/context.ts` in more than one chunk, so
+  `withContext` wrote to one store and the Mongoose plugins read another.
+  `getContext()` returned undefined inside `tenantScope`, which then declined
+  to add `orgId` — every tenant read every other tenant's rows, with no error,
+  and whether it happened depended on module compile order. Anything else that
+  must be one-per-process belongs on `globalThis` for the same reason.
 - The soft-delete plugin hooks `deleteOne` as **query** middleware and injects
   `deletedAt: null`. A genuine hard delete must call `.withDeleted()` or it
   silently matches nothing. `lib/db/purge.ts` is the only place that does this.

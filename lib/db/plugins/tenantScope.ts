@@ -79,7 +79,7 @@ export function tenantScope(schema: Schema) {
     // orgId is immutable. A document never moves between tenants.
     if (this.isModified("orgId")) {
       throw new Error(
-        "orgId is immutable — a document cannot be moved between organizations."
+        "orgId is immutable — a document cannot be moved between organizations.",
       );
     }
   });

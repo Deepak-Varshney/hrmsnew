@@ -90,11 +90,9 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     withTeam,
     {
       label: "Organisation",
-      // No Settings entry yet — app/settings/page.tsx does not exist, and a
-      // nav item that 404s is worse than a missing one. Add it back with the
-      // page.
       items: [
         { href: "/requests", label: "Change requests", icon: InboxIcon },
+        { href: "/settings", label: "Settings", icon: Settings },
         { href: "/activity", label: "Activity log", icon: ScrollText },
       ],
     },
