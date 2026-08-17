@@ -163,6 +163,109 @@ export async function myMonthSummary(month = monthKeyOf()): Promise<MonthSummary
   return base;
 }
 
+export interface DayRecord {
+  _id: string;
+  date: string;
+  status: string;
+  totalHours: number;
+  punches: { type: string; time: string }[];
+  firstIn: string | null;
+  lastOut: string | null;
+  isLate: boolean;
+}
+
+/** Every record for one month — feeds both the calendar and the log view. */
+export async function myMonthRecords(month = monthKeyOf()): Promise<DayRecord[]> {
+  const ctx = getContext();
+  if (!ctx?.userId || ctx.userId === "system") return [];
+
+  const rows: any[] = await Attendance.find({
+    userId: ctx.userId,
+    date: { $regex: `^${month}` },
+  })
+    .sort({ date: -1 })
+    .lean();
+
+  return rows.map((row) => {
+    const punches = (row.punches ?? []).map((p: any) => ({
+      type: p.type,
+      time: new Date(p.time).toISOString(),
+    }));
+    const ins = punches.filter((p: any) => p.type === "IN");
+    const outs = punches.filter((p: any) => p.type === "OUT");
+    const inMinutes = firstInMinutes(row.punches);
+
+    return {
+      _id: String(row._id),
+      date: row.date,
+      status: row.status ?? "Present",
+      totalHours: row.totalHours ?? 0,
+      punches,
+      firstIn: ins[0]?.time ?? null,
+      lastOut: outs[outs.length - 1]?.time ?? null,
+      isLate: inMinutes !== null && inMinutes > LATE_THRESHOLD_MINUTES,
+    };
+  });
+}
+
+/** Team attendance for a specific date, for the leadership table. */
+export async function teamOnDate(date: string): Promise<{
+  members: TeamMemberToday[];
+  markedIn: number;
+}> {
+  const scope = can("attendance.read");
+  if (scope !== "team" && scope !== "org") return { members: [], markedIn: 0 };
+
+  const orgId = requireOrgId();
+
+  const employeeFilter: Record<string, any> =
+    scope === "team"
+      ? {
+          _id: {
+            $in: (await resolveTeamIds()).map((id) => new mongoose.Types.ObjectId(id)),
+          },
+        }
+      : {};
+
+  const employees: any[] = await Employee.find({
+    ...employeeFilter,
+    "employment.status": { $ne: "exited" },
+  })
+    .select("displayName employeeCode userId contact.workEmail")
+    .sort({ displayName: 1 })
+    .lean();
+
+  const rows: any[] = await Attendance.find({
+    orgId,
+    userId: { $in: employees.map((e) => e.userId).filter(Boolean) },
+    date,
+  }).lean();
+
+  const byUser = new Map(rows.map((r) => [String(r.userId), r]));
+
+  const members: TeamMemberToday[] = employees.map((e) => {
+    const row = byUser.get(String(e.userId));
+    const punches = row?.punches ?? [];
+    const ins = punches.filter((p: any) => p.type === "IN");
+    const outs = punches.filter((p: any) => p.type === "OUT");
+
+    return {
+      employeeId: String(e._id),
+      displayName: e.displayName,
+      employeeCode: e.employeeCode,
+      status: row?.status ?? "Not marked",
+      firstIn: ins[0] ? new Date(ins[0].time).toISOString() : null,
+      lastOut: outs.length ? new Date(outs[outs.length - 1].time).toISOString() : null,
+      totalHours: row?.totalHours ?? 0,
+    };
+  });
+
+  return {
+    members,
+    markedIn: members.filter((m) => m.status !== "Not marked").length,
+  };
+}
+
 export interface TeamMemberToday {
   employeeId: string;
   displayName: string;
