@@ -8,6 +8,7 @@ import DocumentModel from "@/model/Document";
 import HRNotice from "@/model/HRNotice";
 import SalaryStructure from "@/model/SalaryStructure";
 import EmploymentHistory from "@/model/EmploymentHistory";
+import ChangeRequest from "@/model/ChangeRequest";
 import { serializeEmployee } from "@/lib/rbac";
 import { getContext } from "@/lib/context";
 
@@ -31,15 +32,20 @@ export async function loadProfile(employeeId: string) {
       .lean();
   }
 
-  const [membership, salary, documents, notices, history] = await Promise.all([
-    Membership.findOne({ employeeId, status: "active" }).select("role").lean(),
+  const [membership, salary, documents, notices, history, pendingRequest] =
+    await Promise.all([
+      Membership.findOne({ employeeId, status: "active" }).select("role").lean(),
     SalaryStructure.findOne({ employeeId, effectiveTo: null })
       .sort({ effectiveFrom: -1 })
       .lean(),
-    DocumentModel.find({ employeeId }).sort({ createdAt: -1 }).lean(),
-    HRNotice.find({ employeeId }).sort({ issuedAt: -1 }).limit(50).lean(),
-    EmploymentHistory.find({ employeeId }).sort({ effectiveFrom: -1 }).limit(30).lean(),
-  ]);
+      DocumentModel.find({ employeeId }).sort({ createdAt: -1 }).lean(),
+      HRNotice.find({ employeeId }).sort({ issuedAt: -1 }).limit(50).lean(),
+      EmploymentHistory.find({ employeeId })
+        .sort({ effectiveFrom: -1 })
+        .limit(30)
+        .lean(),
+      ChangeRequest.findOne({ employeeId, status: "pending" }).lean(),
+    ]);
 
   return {
     // Masked by default. The edit form takes a new value rather than showing
@@ -63,6 +69,8 @@ export async function loadProfile(employeeId: string) {
     },
     notices,
     history,
+    /** Non-null while an edit is awaiting HR — the form goes read-only. */
+    pendingRequest,
   };
 }
 

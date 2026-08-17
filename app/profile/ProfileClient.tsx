@@ -106,7 +106,25 @@ export function ProfileClient({
   const [, startTransition] = useTransition();
 
   const employee = profile.employee;
+  const pending = profile.pendingRequest;
   const [saving, setSaving] = useState(false);
+
+  async function withdraw() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/change-requests/${pending._id}`, {
+        method: "DELETE",
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Could not withdraw");
+      toast.success(body.message);
+      startTransition(() => router.refresh());
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const [personal, setPersonal] = useState({
     personalEmail: employee.contact?.personalEmail ?? "",
@@ -137,36 +155,37 @@ export function ProfileClient({
   async function savePersonal() {
     setSaving(true);
     try {
+      // Flat dot-paths: the change request records one row per field, so HR
+      // reviews "Phone" rather than a nested blob.
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contact: {
-            personalEmail: personal.personalEmail,
-            personalPhone: personal.personalPhone,
-            currentAddress: {
-              line1: personal.addressLine1,
-              city: personal.city,
-              state: personal.state,
-              pincode: personal.pincode,
-              country: "India",
-            },
+          "contact.personalEmail": personal.personalEmail,
+          "contact.personalPhone": personal.personalPhone,
+          "contact.currentAddress": {
+            line1: personal.addressLine1,
+            city: personal.city,
+            state: personal.state,
+            pincode: personal.pincode,
+            country: "India",
           },
           dateOfBirth: personal.dateOfBirth || undefined,
           maritalStatus: personal.maritalStatus || undefined,
           bloodGroup: personal.bloodGroup || undefined,
-          bank,
+          "bank.accountHolderName": bank.accountHolderName,
+          "bank.accountNumber": bank.accountNumber || undefined,
+          "bank.ifsc": bank.ifsc,
+          "bank.bankName": bank.bankName,
+          "bank.branch": bank.branch,
         }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Could not save");
 
-      toast.success(body.message);
-      if (bank.accountNumber) {
-        toast.info("Bank details changed", {
-          description: "HR is notified whenever bank details are updated.",
-        });
-      }
+      toast.success(body.message, {
+        description: "Nothing changes on your record until HR approves it.",
+      });
       setBank((b) => ({ ...b, accountNumber: "" }));
       startTransition(() => router.refresh());
     } catch (err: any) {
@@ -330,9 +349,25 @@ export function ProfileClient({
       {/* ---- Personal ---- */}
       {tab === "personal" ? (
         <div className="space-y-4">
+          {pending ? (
+            <div className="flex flex-col gap-3 rounded-lg border border-info/30 bg-info/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">Waiting for HR</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  You asked to change {pending.fields.map((f: any) => f.label).join(", ")}
+                  {" "}on {formatDate(pending.createdAt)}. Your record is unchanged
+                  until HR approves it.
+                </p>
+              </div>
+              <Button variant="outline" onClick={withdraw} disabled={saving}>
+                Withdraw
+              </Button>
+            </div>
+          ) : null}
+
           <Panel
             title="Personal details"
-            description="These you can change yourself. Name and statutory IDs need HR."
+            description="Changes are sent to HR for approval — nothing on your record moves until then."
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -448,10 +483,17 @@ export function ProfileClient({
             </div>
           </Panel>
 
-          <Button onClick={savePersonal} disabled={saving}>
-            <Save className="mr-2 h-4 w-4" aria-hidden />
-            {saving ? "Saving…" : "Save changes"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={savePersonal} disabled={saving || Boolean(pending)}>
+              <Save className="mr-2 h-4 w-4" aria-hidden />
+              {saving ? "Sending…" : "Send to HR"}
+            </Button>
+            <p className="text-xs text-subtle-foreground">
+              {pending
+                ? "Withdraw the request above before submitting another."
+                : "HR reviews every change before it is applied."}
+            </p>
+          </div>
         </div>
       ) : null}
 

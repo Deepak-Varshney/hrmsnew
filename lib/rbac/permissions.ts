@@ -19,6 +19,9 @@ export type Permission =
   | "employee.delete"
   | "employee.export"
   | "employee.pii.read"
+  // Self-service edits, which always route through HR
+  | "changerequest.read"
+  | "changerequest.approve"
   // Documents
   | "document.read"
   | "document.create"
@@ -107,6 +110,9 @@ const ROLE_PERMISSIONS: Record<Exclude<Role, "SUPER_ADMIN">, PermissionMap> = {
     "leave.read": "org",
     "leave.approve": "org",
     "leave.configure": "org",
+
+    "changerequest.read": "org",
+    "changerequest.approve": "org",
 
     "payroll.read": "org",
     "payroll.run": "org",
@@ -214,6 +220,9 @@ const ROLE_PERMISSIONS: Record<Exclude<Role, "SUPER_ADMIN">, PermissionMap> = {
 
     "payroll.read": "self",
 
+    // Employees can raise and track their own requests, never approve them.
+    "changerequest.read": "self",
+
     "activity.read": "self",
   },
 };
@@ -227,24 +236,14 @@ export function permissionsFor(role: Role): PermissionMap {
  * Employee fields an employee may change on their own record without HR
  * approval. Everything else routes through a change request.
  */
-export const SELF_EDITABLE_EMPLOYEE_FIELDS = new Set([
-  "contact",
-  "emergencyContacts",
-  "family",
-  "skills",
-  "photo",
-  "dateOfBirth",
-  "maritalStatus",
-  "bloodGroup",
-  // Bank details are self-service by product decision.
-  //
-  // ⚠ This is the classic payroll-fraud vector: change the account, wait for
-  // payday. It is mitigated, not eliminated, by logging every change as a
-  // critical activity so HR can see it. If you later want a verification
-  // step, move "bank" into APPROVAL_REQUIRED_EMPLOYEE_FIELDS — the change
-  // request flow already handles the rest.
-  "bank",
-]);
+/**
+ * Fields an employee may change on their own record with no review.
+ *
+ * Deliberately just the profile photo. Every other self-service edit goes
+ * through a ChangeRequest and HR approval — see lib/services/changeRequests.
+ * The requestable set lives there, as REQUESTABLE_FIELDS.
+ */
+export const SELF_EDITABLE_EMPLOYEE_FIELDS = new Set(["photo"]);
 
 /**
  * Employee fields that require HR approval when the employee initiates the

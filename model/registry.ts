@@ -14,6 +14,7 @@ import "./ActivityLog";
 import "./Announcement";
 import "./Attendance";
 import "./AuditLog";
+import "./ChangeRequest";
 import "./Department";
 import "./Designation";
 import "./Document";
