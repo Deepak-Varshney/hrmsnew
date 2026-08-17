@@ -29,13 +29,31 @@ export default async function PayrollPage({
   const requested = typeof params.month === "string" ? params.month : undefined;
 
   const { session, data } = await loadWithSession(async () => {
-    const months = await availableMonths();
+    const canRun = can("payroll.run") !== "none";
+    const withPayslips = await availableMonths();
+
+    // Someone who can run payroll needs to select a month that has no
+    // payslips yet — that is the whole point of generating one. Everyone
+    // else only sees months that actually have something to show.
+    const months = canRun
+      ? Array.from(
+          new Set([
+            ...withPayslips,
+            ...Array.from({ length: 12 }, (_, i) => {
+              const d = new Date();
+              d.setMonth(d.getMonth() - i);
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            }),
+          ])
+        ).sort().reverse()
+      : withPayslips;
+
     // Default to the newest month that actually has payslips, not the
     // current one — payroll is generated after a month closes.
-    const month = requested ?? (await defaultMonth());
+    const month = requested ?? (await defaultMonth()) ?? months[0] ?? null;
 
     if (!month) {
-      return { months, month: null, payroll: null, own: null, scope: can("payroll.read") };
+      return { months, month: null, payroll: null, own: null, scope: can("payroll.read"), canRun };
     }
 
     const [payroll, own] = await Promise.all([
@@ -43,7 +61,7 @@ export default async function PayrollPage({
       myPayslip(month),
     ]);
 
-    return { months, month, payroll, own, scope: can("payroll.read") };
+    return { months, month, payroll, own, scope: can("payroll.read"), canRun };
   });
 
   return (
@@ -54,6 +72,7 @@ export default async function PayrollPage({
         payroll={plain(data.payroll)}
         ownPayslip={plain(data.own) as FullPayslip | null}
         scope={data.scope}
+        canRun={data.canRun}
         role={session.role}
         orgName={session.org?.name ?? null}
       />

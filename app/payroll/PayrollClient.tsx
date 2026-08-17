@@ -17,6 +17,7 @@ import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { StatusPill, type PillTone } from "@/components/ui/status-pill";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { PayrollActions } from "@/components/payroll/PayrollActions";
 import { formatINR, formatDate, monthLabel, monthLabelShort } from "@/lib/format";
 
 interface PayslipRow {
@@ -82,6 +83,7 @@ export function PayrollClient({
   payroll,
   ownPayslip,
   scope,
+  canRun,
   role,
   orgName,
 }: {
@@ -90,6 +92,7 @@ export function PayrollClient({
   payroll: { payslips: PayslipRow[]; totals: any; run: any } | null;
   ownPayslip: FullPayslip | null;
   scope: string;
+  canRun: boolean;
   role: string;
   orgName: string | null;
 }) {
@@ -134,16 +137,24 @@ export function PayrollClient({
                     : payroll.run.status}
                 </StatusPill>
               ) : null}
+
+              {canRun && month ? (
+                <PayrollActions month={month} status={payroll?.run?.status ?? null} />
+              ) : null}
             </>
           ) : null
         }
       />
 
-      {!month || !payroll ? (
+      {!month || !payroll || payroll.totals.payslipCount === 0 ? (
         <EmptyState
           icon={Receipt}
-          title="No payroll yet"
-          description="Payroll is generated once a month closes, because it reads that month's attendance. Nothing has been run for this organisation so far."
+          title={month ? `Nothing generated for ${monthLabel(month)}` : "No payroll yet"}
+          description={
+            canRun
+              ? "Generation reads attendance for the month, so run it once the month's punches are settled. Everyone with a salary structure gets a payslip."
+              : "Payroll is generated once a month closes, because it reads that month's attendance. Nothing has been run for this month."
+          }
         />
       ) : (
         <>

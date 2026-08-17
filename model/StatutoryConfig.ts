@@ -78,11 +78,29 @@ export interface IStatutoryConfig {
     cessRate: number;
   };
 
+  /**
+   * Labour Welfare Fund. State-specific, small, and rarely monthly — most
+   * states deduct half-yearly or annually, so the months it applies in are
+   * part of the config rather than assumed.
+   */
+  lwf: {
+    enabled: boolean;
+    state: string;
+    /** Employee share per deduction cycle, in paise. */
+    employeeAmount: number;
+    employerAmount: number;
+    /** Calendar months (1-12) in which the deduction is taken. */
+    deductionMonths: number[];
+  };
+
   gratuity: {
     enabled: boolean;
     minimumYears: number;
     /** Statutory cap, in paise. */
     cap: number;
+    /** Days of wages per completed year. The Act's formula is 15/26. */
+    daysPerYear: number;
+    monthDays: number;
   };
 
   deletedAt?: Date | null;
@@ -136,10 +154,21 @@ const StatutoryConfigSchema = new Schema<IStatutoryConfig>(
       cessRate: { type: Number, default: 4 },
     },
 
+    lwf: {
+      enabled: { type: Boolean, default: true },
+      state: { type: String, default: "Karnataka" },
+      employeeAmount: { type: Number, default: 20_00 },
+      employerAmount: { type: Number, default: 40_00 },
+      // Karnataka deducts once a year, in December.
+      deductionMonths: { type: [Number], default: [12] },
+    },
+
     gratuity: {
       enabled: { type: Boolean, default: true },
       minimumYears: { type: Number, default: 5 },
       cap: { type: Number, default: 20_00_000_00 },
+      daysPerYear: { type: Number, default: 15 },
+      monthDays: { type: Number, default: 26 },
     },
   },
   {

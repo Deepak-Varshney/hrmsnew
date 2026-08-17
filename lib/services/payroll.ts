@@ -89,6 +89,25 @@ export function monthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/**
+ * Every weekday in the month.
+ *
+ * Distinct from the dashboard's workingDaysIn(), which stops at today —
+ * payroll must divide by the whole month or a mid-month run would overstate
+ * everyone's per-day rate.
+ */
+export function workingDaysInMonth(month: string): number {
+  const [year, m] = month.split("-").map(Number);
+  const lastDay = new Date(year, m, 0).getDate();
+
+  let count = 0;
+  for (let day = 1; day <= lastDay; day++) {
+    const weekday = new Date(year, m - 1, day).getDay();
+    if (weekday !== 0 && weekday !== 6) count++;
+  }
+  return count;
+}
+
 // --- statutory computation -------------------------------------------------
 
 export interface PayInputs {
@@ -100,6 +119,8 @@ export interface PayInputs {
   /** Annual taxable income projection, in paise. */
   annualTaxable: number;
   regime: "old" | "new";
+  /** Calendar month 1-12. LWF only applies in configured months. */
+  monthNumber: number;
 }
 
 export interface StatutoryResult {
@@ -229,6 +250,28 @@ export function computeStatutory(
     });
   }
 
+  // Labour Welfare Fund — most states deduct once or twice a year, not
+  // monthly, so it only appears in the configured months.
+  const { lwf } = config;
+  if (lwf?.enabled && lwf.deductionMonths?.includes(inputs.monthNumber)) {
+    if (lwf.employeeAmount > 0) {
+      employeeDeductions.push({
+        code: "LWF",
+        name: "Labour Welfare Fund",
+        amount: lwf.employeeAmount,
+        isStatutory: true,
+      });
+    }
+    if (lwf.employerAmount > 0) {
+      employerContributions.push({
+        code: "LWF_EMPLOYER",
+        name: "Employer LWF",
+        amount: lwf.employerAmount,
+        isStatutory: true,
+      });
+    }
+  }
+
   // Annual liability spread evenly across the year. A real implementation
   // recomputes the remaining months on every revision, bonus, or regime
   // change rather than assuming twelve equal instalments.
@@ -270,10 +313,15 @@ export function buildPayslip(params: {
   structure: { components: any[]; monthlyGross: number; annualCtc: number };
   attendance: AttendanceInput;
   config: IStatutoryConfig;
+  /** "YYYY-MM". Determines whether LWF applies this cycle. */
+  month: string;
   regime?: "old" | "new";
+  /** Paid overtime for the month, in paise. */
+  overtimeAmount?: number;
 }) {
-  const { structure, attendance, config } = params;
+  const { structure, attendance, config, month } = params;
   const regime = params.regime ?? config.incomeTax.defaultRegime;
+  const monthNumber = Number(month.split("-")[1]);
 
   // Loss of pay reduces every earning proportionally.
   const ratio =
@@ -290,6 +338,16 @@ export function buildPayslip(params: {
       isStatutory: false,
     }));
 
+  // Overtime is paid on top and is not pro-rated — it is hours already worked.
+  if (params.overtimeAmount && params.overtimeAmount > 0) {
+    earnings.push({
+      code: "OT",
+      name: "Overtime",
+      amount: roundToRupee(params.overtimeAmount),
+      isStatutory: false,
+    });
+  }
+
   const grossEarnings = earnings.reduce((sum, line) => sum + line.amount, 0);
 
   const basic = earnings.find((e) => e.code === "BASIC")?.amount ?? 0;
@@ -302,6 +360,7 @@ export function buildPayslip(params: {
     monthlyGross: grossEarnings,
     annualTaxable: grossEarnings * 12,
     regime,
+    monthNumber,
   });
 
   // Non-statutory deductions carried on the structure (loans, recoveries).
@@ -329,6 +388,50 @@ export function buildPayslip(params: {
     netPay,
     employerCost,
     netPayInWords: amountInWords(netPay),
+  };
+}
+
+// --- gratuity --------------------------------------------------------------
+
+/**
+ * Gratuity under the Payment of Gratuity Act.
+ *
+ *   (15 / 26) × last drawn basic+DA × completed years
+ *
+ * Payable only after the minimum qualifying service, and capped. A part-year
+ * of six months or more counts as a full year — that rounding is in the Act,
+ * not a convenience, and dropping it short-changes people at exit.
+ *
+ * Returned as an accrued liability for reporting; it is paid at exit, not
+ * monthly.
+ */
+export function computeGratuity(
+  config: IStatutoryConfig,
+  params: { lastDrawnBasicPlusDa: number; dateOfJoining: Date; asOf?: Date }
+): { eligible: boolean; completedYears: number; amount: number } {
+  const { gratuity } = config;
+  const asOf = params.asOf ?? new Date();
+
+  const years =
+    (asOf.getTime() - params.dateOfJoining.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+
+  // Six months or more rounds up to a full year.
+  const wholeYears = Math.floor(years);
+  const remainder = years - wholeYears;
+  const completedYears = remainder >= 0.5 ? wholeYears + 1 : wholeYears;
+
+  if (!gratuity?.enabled || completedYears < (gratuity.minimumYears ?? 5)) {
+    return { eligible: false, completedYears, amount: 0 };
+  }
+
+  const raw =
+    (params.lastDrawnBasicPlusDa * (gratuity.daysPerYear ?? 15) * completedYears) /
+    (gratuity.monthDays ?? 26);
+
+  return {
+    eligible: true,
+    completedYears,
+    amount: roundToRupee(Math.min(raw, gratuity.cap ?? 20_00_000_00)),
   };
 }
 

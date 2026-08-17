@@ -376,6 +376,19 @@ async function main() {
               personalPhone: `+91 9${between(100000000, 999999999)}`,
               currentAddress: { city: pick(["Bengaluru", "New Delhi"]), country: "India" },
             },
+            // Encrypted at rest by the schema's setters. Needed for the bank
+            // advice file to contain anything useful.
+            statutory: {
+              pan: `ABCPD${between(1000, 9999)}${pick(["A", "B", "C", "K", "M"])}`,
+              uan: `10${between(10000000, 99999999)}${between(10, 99)}`,
+            },
+            bank: {
+              accountHolderName: `${person.firstName} ${person.lastName}`,
+              accountNumber: `${between(10000000, 99999999)}${between(1000, 9999)}`,
+              ifsc: pick(["HDFC0001234", "ICIC0004567", "SBIN0007890", "UTIB0002345"]),
+              bankName: pick(["HDFC Bank", "ICICI Bank", "State Bank of India", "Axis Bank"]),
+              branch: pick(["Koramangala", "Indiranagar", "Connaught Place", "Whitefield"]),
+            },
             employment: {
               dateOfJoining,
               probationMonths: 6,
@@ -769,6 +782,7 @@ async function main() {
               leaveDays: 0,
             },
             config: config.toObject ? (config.toObject() as any) : (config as any),
+            month,
           });
 
           await Payslip.create({

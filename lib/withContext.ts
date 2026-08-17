@@ -150,14 +150,13 @@ async function resolveOrg(
 function errorResponse(err: any): Response {
   const status = err?.status ?? (err?.name === "JsonWebTokenError" ? 401 : 500);
 
-  if (status === 401) {
-    return NextResponse.json({ error: err.message ?? "Unauthorized" }, { status: 401 });
-  }
-  if (status === 403) {
-    return NextResponse.json({ error: err.message ?? "Forbidden" }, { status: 403 });
-  }
-  if (status === 404) {
-    return NextResponse.json({ error: err.message ?? "Not found" }, { status: 404 });
+  // Anything a caller can act on — 400 validation, 403 permission, 404
+  // missing, 409 wrong lifecycle state — carries its message through. These
+  // are deliberate, written-for-a-human messages ("Approve the payroll
+  // before generating a bank file"), and swallowing them into a generic
+  // "Server error" is how a clear refusal becomes a support ticket.
+  if (status >= 400 && status < 500) {
+    return NextResponse.json({ error: err.message ?? "Request failed" }, { status });
   }
 
   // Unexpected: log server-side, return something generic. Internal messages
