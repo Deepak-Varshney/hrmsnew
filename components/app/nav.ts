@@ -57,7 +57,8 @@ const TODAY = (): NavGroup => ({
 /** Everyone sees their own payslips; only leadership sees the roster. */
 const withTeam: NavGroup = { label: "People", items: [EMPLOYEES, PAYROLL] };
 const selfOnly: NavGroup = { label: "People", items: [PAYROLL] };
-const ACCOUNT: NavGroup = { label: "Account", items: [PROFILE] };
+const POLICIES: NavItem = { href: "/policies", label: "Policies", icon: ScrollText };
+const ACCOUNT: NavGroup = { label: "Account", items: [PROFILE, POLICIES] };
 
 export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
   EMPLOYEE: [TODAY(), selfOnly, ACCOUNT],
