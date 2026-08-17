@@ -24,27 +24,9 @@ import {
 } from "@/lib/cloudinary";
 import { ValidationError, ConflictError } from "@/lib/services/employee";
 
-export const PERSONAL_CATEGORIES = [
-  "Aadhaar",
-  "PAN",
-  "Passport",
-  "Educational certificate",
-  "Previous experience letter",
-  "Bank proof",
-  "Address proof",
-  "Other",
-];
-
-export const COMPANY_CATEGORIES = [
-  "Offer letter",
-  "Appointment letter",
-  "Confirmation letter",
-  "Appraisal letter",
-  "Experience letter",
-  "Relieving letter",
-  "Salary certificate",
-  "Other",
-];
+// Category lists live in lib/documentCategories.ts so client components can
+// import them without pulling in the Cloudinary SDK and Mongoose models.
+export { PERSONAL_CATEGORIES, COMPANY_CATEGORIES } from "@/lib/documentCategories";
 
 /** Documents for an employee, if the caller's scope reaches them. */
 export async function listDocuments(employeeId: string) {
@@ -117,6 +99,8 @@ export async function uploadEmployeeDocument(params: {
     category: params.category,
     name: params.name?.trim() || params.file.name,
     storageKey: uploaded.publicId,
+    format: uploaded.format,
+    resourceType: uploaded.resourceType,
     mimeType: params.file.type,
     sizeBytes: uploaded.bytes,
     issueDate: params.issueDate ? new Date(params.issueDate) : null,
@@ -145,10 +129,9 @@ export async function documentAccessUrl(documentId: string) {
     throw new ForbiddenError("document.read", "Not found");
   }
 
-  const resourceType = doc.mimeType === "application/pdf" ? "image" : "image";
-
   const url = signedDocumentUrl(doc.storageKey, {
-    resourceType,
+    resourceType: doc.resourceType ?? "image",
+    format: doc.format,
     expiresInSeconds: 300,
   });
 

@@ -160,24 +160,35 @@ export async function uploadAvatar(
 }
 
 /**
- * Time-limited URL for a private document.
+ * Time-limited URL for a private document. Default five minutes.
  *
- * Default five minutes: long enough to open or download, short enough that a
- * URL pasted into a chat is useless by the time anyone else clicks it.
+ * Uses private_download_url rather than a signed delivery URL. A signed
+ * delivery URL (cloudinary.url with sign_url) proves the URL was not
+ * tampered with, but it does NOT expire — `expires_at` on delivery URLs
+ * needs token-based authentication, which is a paid add-on. Verified
+ * against a live account: the delivery URL came back with no exp component
+ * and kept working.
+ *
+ * private_download_url embeds the expiry in the signature and works on every
+ * plan, so the link genuinely dies. That matters here: a permanent URL to an
+ * Aadhaar scan defeats the whole point of uploading it privately.
  */
 export function signedDocumentUrl(
   publicId: string,
-  opts: { resourceType?: string; expiresInSeconds?: number } = {}
+  opts: {
+    resourceType?: string;
+    /** Stored at upload time — the signature is computed over it. */
+    format?: string | null;
+    expiresInSeconds?: number;
+  } = {}
 ): string {
   configure();
 
   const expiresAt = Math.floor(Date.now() / 1000) + (opts.expiresInSeconds ?? 300);
 
-  return cloudinary.url(publicId, {
-    type: "authenticated",
+  return cloudinary.utils.private_download_url(publicId, opts.format ?? "", {
     resource_type: opts.resourceType ?? "image",
-    sign_url: true,
-    secure: true,
+    type: "authenticated",
     expires_at: expiresAt,
   });
 }

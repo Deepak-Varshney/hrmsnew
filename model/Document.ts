@@ -29,6 +29,10 @@ export interface IDocument {
 
   /** Cloudinary public_id of an `authenticated` asset. Never a public URL. */
   storageKey: string;
+  /** Cloudinary format (pdf, png…). The download signature is computed over it. */
+  format?: string;
+  /** Cloudinary resource_type — image, raw or video. Needed to build the URL. */
+  resourceType?: string;
   mimeType?: string;
   sizeBytes?: number;
 
@@ -62,6 +66,8 @@ const DocumentSchema = new Schema<IDocument>(
     name: { type: String, required: true, trim: true },
 
     storageKey: { type: String, required: true },
+    format: String,
+    resourceType: { type: String, default: "image" },
     mimeType: String,
     sizeBytes: Number,
 

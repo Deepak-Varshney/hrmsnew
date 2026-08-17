@@ -196,6 +196,9 @@ const ROLE_PERMISSIONS: Record<Exclude<Role, "SUPER_ADMIN">, PermissionMap> = {
 
     "document.read": "self",
     "document.create": "self",
+    // Own uploads only — the service refuses company-issued documents for
+    // anyone without document.verify, so this cannot remove an offer letter.
+    "document.delete": "self",
 
     "asset.read": "self",
 
@@ -225,26 +228,36 @@ export function permissionsFor(role: Role): PermissionMap {
  * approval. Everything else routes through a change request.
  */
 export const SELF_EDITABLE_EMPLOYEE_FIELDS = new Set([
-  "contact.personalEmail",
-  "contact.personalPhone",
-  "contact.currentAddress",
+  "contact",
   "emergencyContacts",
   "family",
   "skills",
   "photo",
+  "dateOfBirth",
+  "maritalStatus",
+  "bloodGroup",
+  // Bank details are self-service by product decision.
+  //
+  // ⚠ This is the classic payroll-fraud vector: change the account, wait for
+  // payday. It is mitigated, not eliminated, by logging every change as a
+  // critical activity so HR can see it. If you later want a verification
+  // step, move "bank" into APPROVAL_REQUIRED_EMPLOYEE_FIELDS — the change
+  // request flow already handles the rest.
+  "bank",
 ]);
 
 /**
  * Employee fields that require HR approval when the employee initiates the
  * change. Producing a ChangeRequest rather than a direct write.
  */
+/**
+ * Changing these is effectively changing who the record is about, or a value
+ * the company must be able to defend to a regulator. HR approves them.
+ */
 export const APPROVAL_REQUIRED_EMPLOYEE_FIELDS = new Set([
   "firstName",
   "middleName",
   "lastName",
-  "dateOfBirth",
-  "contact.permanentAddress",
-  "bank",
   "statutory",
 ]);
 
