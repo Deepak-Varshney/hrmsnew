@@ -24,12 +24,13 @@ import {
 } from "@/lib/rbac/guard";
 import type { Permission } from "@/lib/rbac/permissions";
 import { logActivity } from "@/lib/activity";
+import { actingOrgSlugFromRequest } from "@/lib/actingOrg";
 
 type RouteParams = Record<string, string | string[]>;
 
 type RouteHandler<P extends RouteParams> = (
   req: Request,
-  ctx: { params: Promise<P> }
+  ctx: { params: Promise<P> },
 ) => Promise<Response> | Response;
 
 export interface WithContextOptions {
@@ -94,7 +95,7 @@ function clientIp(req: Request): string | undefined {
 async function resolveOrg(
   req: Request,
   params: RouteParams,
-  userId: string
+  userId: string,
 ): Promise<{ orgId: string; role: Role; employeeId: string | null } | null> {
   const { default: Organization } = await import("@/model/Organization");
   const { default: Membership } = await import("@/model/Membership");
@@ -116,7 +117,10 @@ async function resolveOrg(
     // org slugs exist.
     if (!org) return null;
     if ((org as any).status === "suspended") {
-      throw new ForbiddenError("org.suspended", "This organization is suspended.");
+      throw new ForbiddenError(
+        "org.suspended",
+        "This organization is suspended.",
+      );
     }
     orgId = String((org as any)._id);
   }
@@ -135,7 +139,7 @@ async function resolveOrg(
   if (!orgId && memberships.length > 1) {
     throw new ForbiddenError(
       "org.ambiguous",
-      "Multiple organizations available. Specify one via the x-org-slug header or ?org=."
+      "Multiple organizations available. Specify one via the x-org-slug header or ?org=.",
     );
   }
 
@@ -156,7 +160,10 @@ function errorResponse(err: any): Response {
   // before generating a bank file"), and swallowing them into a generic
   // "Server error" is how a clear refusal becomes a support ticket.
   if (status >= 400 && status < 500) {
-    return NextResponse.json({ error: err.message ?? "Request failed" }, { status });
+    return NextResponse.json(
+      { error: err.message ?? "Request failed" },
+      { status },
+    );
   }
 
   // Unexpected: log server-side, return something generic. Internal messages
@@ -167,13 +174,17 @@ function errorResponse(err: any): Response {
 
 export function withContext<P extends RouteParams = RouteParams>(
   handler: RouteHandler<P>,
-  options: WithContextOptions = {}
+  options: WithContextOptions = {},
 ) {
-  return async (req: Request, routeCtx?: { params: Promise<P> }): Promise<Response> => {
+  return async (
+    req: Request,
+    routeCtx?: { params: Promise<P> },
+  ): Promise<Response> => {
     try {
       await connect();
 
-      const params = ((routeCtx?.params ? await routeCtx.params : {}) ?? {}) as P;
+      const params = ((routeCtx?.params ? await routeCtx.params : {}) ??
+        {}) as P;
 
       const token = sessionToken(req);
       if (!token) throw new UnauthenticatedError("Not signed in");
@@ -182,7 +193,10 @@ export function withContext<P extends RouteParams = RouteParams>(
       const u = user as any;
 
       if (u.status === "suspended") {
-        throw new ForbiddenError("user.suspended", "This account is suspended.");
+        throw new ForbiddenError(
+          "user.suspended",
+          "This account is suspended.",
+        );
       }
 
       const base = {
@@ -194,7 +208,10 @@ export function withContext<P extends RouteParams = RouteParams>(
         userAgent: req.headers.get("user-agent") ?? undefined,
       };
 
-      let ctx: Omit<RequestContext, "bypassTenantScope" | "suppressActivityLog" | "teamIds">;
+      let ctx: Omit<
+        RequestContext,
+        "bypassTenantScope" | "suppressActivityLog" | "teamIds"
+      >;
 
       if (u.isSuperAdmin) {
         // Super admin may pin themselves to an org for a drill-down; otherwise
@@ -204,11 +221,16 @@ export function withContext<P extends RouteParams = RouteParams>(
           (typeof params.orgSlug === "string" ? params.orgSlug : undefined) ??
           req.headers.get("x-org-slug") ??
           url.searchParams.get("org") ??
+          // Admin mode (lib/actingOrg.ts). Last, so an explicit slug on the
+          // request still wins — a drill-down link should not be overridden
+          // by whatever org the console happens to be pinned to.
+          actingOrgSlugFromRequest(req) ??
           undefined;
 
         let orgId: string | null = null;
         if (slug) {
-          const { default: Organization } = await import("@/model/Organization");
+          const { default: Organization } =
+            await import("@/model/Organization");
           const org = await Organization.findOne({ slug: slug.toLowerCase() })
             .select("_id")
             .lean();
@@ -225,7 +247,7 @@ export function withContext<P extends RouteParams = RouteParams>(
           } else {
             throw new ForbiddenError(
               "org.membership",
-              "No active organization membership."
+              "No active organization membership.",
             );
           }
         } else {
@@ -285,7 +307,7 @@ export function withCronAuth(handler: (req: Request) => Promise<Response>) {
           employeeId: null,
           bypassTenantScope: true,
         },
-        () => handler(req)
+        () => handler(req),
       );
     } catch (err) {
       console.error("[cron] job failed", err);

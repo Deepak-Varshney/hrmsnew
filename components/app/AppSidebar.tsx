@@ -3,16 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { NAV_BY_ROLE, isActive, type Role } from "./nav";
+import { navGroupsFor, isActive, type Role } from "./nav";
 
 interface AppSidebarProps {
   role: Role;
   badges?: Partial<Record<"announcements" | "approvals", number>>;
+  actingAsOrg?: boolean;
 }
 
-export function AppSidebar({ role, badges = {} }: AppSidebarProps) {
+export function AppSidebar({
+  role,
+  badges = {},
+  actingAsOrg = false,
+}: AppSidebarProps) {
   const pathname = usePathname() ?? "";
-  const groups = NAV_BY_ROLE[role] ?? NAV_BY_ROLE.EMPLOYEE;
+  const groups = navGroupsFor(role, actingAsOrg);
 
   return (
     <nav
@@ -38,7 +43,7 @@ export function AppSidebar({ role, badges = {} }: AppSidebarProps) {
                       "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                       active
                         ? "bg-primary/10 font-medium text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
                     {active ? (

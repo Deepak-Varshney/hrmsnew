@@ -23,6 +23,7 @@ import { redirect } from "next/navigation";
 import { connect } from "@/lib/mongoose";
 import { SESSION_COOKIE, verifyTokenAndSession } from "@/lib/auth";
 import { runWithContext, type Role, type RequestContext } from "@/lib/context";
+import { readActingOrgSlug, resolveActingOrg } from "@/lib/actingOrg";
 
 export interface ServerSession {
   user: { id: string; name: string; email: string; isSuperAdmin: boolean };
@@ -38,6 +39,10 @@ export interface ServerSession {
     designation: string | null;
     department: string | null;
   } | null;
+  /** Super admin only: currently acting inside a single org. */
+  actingAsOrg?: boolean;
+  /** Super admin only: every org, for the switcher. */
+  orgs?: Array<{ id: string; name: string; slug: string }>;
 }
 
 /**
@@ -66,13 +71,30 @@ export async function getServerSession(): Promise<ServerSession | null> {
     };
 
     if (u.isSuperAdmin) {
+      // Admin mode: pinned to one org, so every ordinary page behaves as it
+      // does for that org's admin. isSuperAdmin stays true, so no power is
+      // lost while acting. See lib/actingOrg.ts.
+      const acting = await resolveActingOrg(await readActingOrgSlug());
+
+      const { default: Organization } = await import("@/model/Organization");
+      const orgs: any[] = await Organization.find()
+        .select("name slug")
+        .sort({ name: 1 })
+        .lean();
+
       return {
         ...base,
-        role: "SUPER_ADMIN" as Role,
-        orgId: null,
-        org: null,
+        role: (acting ? "ADMIN" : "SUPER_ADMIN") as Role,
+        orgId: acting?.id ?? null,
+        org: acting,
         employeeId: null,
         employee: null,
+        actingAsOrg: Boolean(acting),
+        orgs: orgs.map((o) => ({
+          id: String(o._id),
+          name: o.name,
+          slug: o.slug,
+        })),
       };
     }
 
@@ -87,7 +109,9 @@ export async function getServerSession(): Promise<ServerSession | null> {
     if (!membership) return null;
 
     const orgId = String(membership.orgId);
-    const employeeId = membership.employeeId ? String(membership.employeeId) : null;
+    const employeeId = membership.employeeId
+      ? String(membership.employeeId)
+      : null;
 
     // Org and employee lookups run inside context so tenant scoping applies.
     const { org, employee } = await runWithContext(
@@ -102,16 +126,19 @@ export async function getServerSession(): Promise<ServerSession | null> {
         suppressActivityLog: true,
       },
       async () => {
-        const [{ default: Organization }, { default: Employee }] = await Promise.all([
-          import("@/model/Organization"),
-          import("@/model/Employee"),
-        ]);
+        const [{ default: Organization }, { default: Employee }] =
+          await Promise.all([
+            import("@/model/Organization"),
+            import("@/model/Employee"),
+          ]);
 
         const [orgDoc, empDoc] = await Promise.all([
           Organization.findById(orgId).select("name slug logo").lean(),
           employeeId
             ? Employee.findById(employeeId)
-                .select("employeeCode displayName photo designationId departmentId")
+                .select(
+                  "employeeCode displayName photo designationId departmentId",
+                )
                 .populate("designationId", "title")
                 .populate("departmentId", "name")
                 .lean()
@@ -119,7 +146,7 @@ export async function getServerSession(): Promise<ServerSession | null> {
         ]);
 
         return { org: orgDoc as any, employee: empDoc as any };
-      }
+      },
     );
 
     return {
@@ -161,8 +188,11 @@ export async function requireServerSession(): Promise<ServerSession> {
 
 function contextFrom(
   session: ServerSession,
-  ip?: string
-): Omit<RequestContext, "bypassTenantScope" | "suppressActivityLog" | "teamIds"> {
+  ip?: string,
+): Omit<
+  RequestContext,
+  "bypassTenantScope" | "suppressActivityLog" | "teamIds"
+> {
   return {
     userId: session.user.id,
     userName: session.user.name,
@@ -183,7 +213,7 @@ function contextFrom(
  * handler does.
  */
 export async function withServerContext<T>(
-  fn: (session: ServerSession) => Promise<T> | T
+  fn: (session: ServerSession) => Promise<T> | T,
 ): Promise<T> {
   const session = await requireServerSession();
   await connect();
@@ -192,12 +222,12 @@ export async function withServerContext<T>(
 
 /** Same, but returns the session alongside the data. */
 export async function loadWithSession<T>(
-  fn: (session: ServerSession) => Promise<T> | T
+  fn: (session: ServerSession) => Promise<T> | T,
 ): Promise<{ session: ServerSession; data: T }> {
   const session = await requireServerSession();
   await connect();
   const data = (await runWithContext(contextFrom(session), () =>
-    fn(session)
+    fn(session),
   )) as T;
   return { session, data };
 }

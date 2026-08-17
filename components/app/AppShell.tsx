@@ -20,6 +20,10 @@ export interface ShellSession {
     designation: string | null;
     department: string | null;
   } | null;
+  /** Super admin only: acting inside a single org rather than platform-wide. */
+  actingAsOrg?: boolean;
+  /** Super admin only: every org, for the switcher in the top bar. */
+  orgs?: Array<{ id: string; name: string; slug: string }>;
 }
 
 export interface ShellBadges {
@@ -54,6 +58,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const role = session.role ?? "EMPLOYEE";
+  const acting = Boolean(session.actingAsOrg);
 
   return (
     <SessionContext.Provider value={session}>
@@ -68,12 +73,14 @@ export function AppShell({
           orgName={session.org?.name ?? "Platform"}
           role={role}
           userName={session.user.name}
+          orgs={session.user.isSuperAdmin ? (session.orgs ?? []) : undefined}
+          actingSlug={acting ? (session.org?.slug ?? null) : null}
         />
 
         {/* min-h-0 lets this row shrink below its content, which is what
             allows the child to scroll instead of pushing the page taller. */}
         <div className="flex min-h-0 flex-1">
-          <AppSidebar role={role} badges={badges} />
+          <AppSidebar role={role} badges={badges} actingAsOrg={acting} />
 
           {/* Bottom padding clears the mobile tab bar. */}
           <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
