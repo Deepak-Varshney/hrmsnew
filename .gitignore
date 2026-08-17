@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Windows reserved filenames
 nul
+
+# Generated demo deck — 2MB of inlined screenshots, not source
+demo-walkthrough.html
