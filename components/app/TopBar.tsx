@@ -37,7 +37,9 @@ export function TopBar({ orgName, role, userName }: TopBarProps) {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-surface/95 px-4 backdrop-blur sm:px-6">
+    // Sits outside the scroll container now, so it needs shrink-0 rather
+    // than sticky positioning.
+    <header className="z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-surface px-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
           <Clock className="h-4.5 w-4.5 text-primary-foreground" aria-hidden />

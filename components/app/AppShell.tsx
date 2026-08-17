@@ -57,18 +57,26 @@ export function AppShell({
 
   return (
     <SessionContext.Provider value={session}>
-      <div className="flex min-h-screen flex-col">
+      {/*
+        The shell is a fixed-height column and only <main> scrolls, so the
+        top bar and sidebar stay put. h-dvh rather than h-screen: on mobile,
+        h-screen ignores the browser's collapsing address bar and leaves the
+        bottom of the page unreachable.
+      */}
+      <div className="flex h-dvh flex-col overflow-hidden">
         <TopBar
           orgName={session.org?.name ?? "Platform"}
           role={role}
           userName={session.user.name}
         />
 
-        <div className="flex flex-1">
+        {/* min-h-0 lets this row shrink below its content, which is what
+            allows the child to scroll instead of pushing the page taller. */}
+        <div className="flex min-h-0 flex-1">
           <AppSidebar role={role} badges={badges} />
 
           {/* Bottom padding clears the mobile tab bar. */}
-          <main className="min-w-0 flex-1 px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
+          <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
             <div className="mx-auto max-w-6xl space-y-6">{children}</div>
           </main>
         </div>
