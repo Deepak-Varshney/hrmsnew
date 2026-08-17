@@ -18,6 +18,7 @@ import {
   Trash2,
   Settings,
   ShieldCheck,
+  Inbox as InboxIcon,
 } from "lucide-react";
 
 export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "LEAD" | "EMPLOYEE";
@@ -69,6 +70,7 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "Organisation",
       items: [
+        { href: "/requests", label: "Change requests", icon: InboxIcon },
         { href: "/settings", label: "Settings", icon: Settings },
         { href: "/activity", label: "Activity log", icon: ScrollText },
       ],
