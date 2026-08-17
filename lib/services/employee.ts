@@ -28,23 +28,46 @@ export class ConflictError extends Error {
 /**
  * Next employee code for the org, e.g. EMP0042.
  *
- * The counter is incremented with a single atomic $inc so two concurrent
+ * The counter is incremented with a single atomic $inc, so two concurrent
  * creates cannot be handed the same code.
+ *
+ * It then skips forward over any code already in use. The counter alone is not
+ * enough: a seed, an import or a migration can write codes directly without
+ * touching it, and then the first employee added through the UI collides on
+ * the unique index and fails with a 500. Rather than trust the counter, this
+ * confirms the code is actually free.
  */
 export async function generateEmployeeCode(orgId?: string): Promise<string> {
   const targetOrg = orgId ?? requireOrgId();
 
-  const org = await Organization.findByIdAndUpdate(
-    targetOrg,
-    { $inc: { employeeCodeSeq: 1 } },
-    { new: true, projection: { employeeCodePrefix: 1, employeeCodeSeq: 1 } }
-  ).lean();
+  // Bounded so a pathological gap cannot spin forever; 1000 attempts is far
+  // beyond any real backlog and still returns in well under a second.
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const org = await Organization.findByIdAndUpdate(
+      targetOrg,
+      { $inc: { employeeCodeSeq: 1 } },
+      { new: true, projection: { employeeCodePrefix: 1, employeeCodeSeq: 1 } },
+    ).lean();
 
-  if (!org) throw new ValidationError("Organization not found.");
+    if (!org) throw new ValidationError("Organization not found.");
 
-  const prefix = (org as any).employeeCodePrefix ?? "EMP";
-  const seq = (org as any).employeeCodeSeq ?? 1;
-  return `${prefix}${String(seq).padStart(4, "0")}`;
+    const prefix = (org as any).employeeCodePrefix ?? "EMP";
+    const seq = (org as any).employeeCodeSeq ?? 1;
+    const code = `${prefix}${String(seq).padStart(4, "0")}`;
+
+    // withDeleted: a deleted employee still occupies the code, because the
+    // unique index covers live rows and a restore would then collide.
+    const taken = await Employee.findOne({ employeeCode: code })
+      .withDeleted()
+      .select("_id")
+      .lean();
+
+    if (!taken) return code;
+  }
+
+  throw new ConflictError(
+    "Could not allocate an employee code. Check the employee code prefix in settings.",
+  );
 }
 
 /**
@@ -55,7 +78,7 @@ export async function generateEmployeeCode(orgId?: string): Promise<string> {
  */
 export async function assertNoReportingCycle(
   employeeId: string,
-  proposedManagerId: string | null | undefined
+  proposedManagerId: string | null | undefined,
 ): Promise<void> {
   if (!proposedManagerId) return;
 
@@ -70,12 +93,14 @@ export async function assertNoReportingCycle(
   while (cursor && hops < 100) {
     if (seen.has(cursor)) {
       throw new ValidationError(
-        "That reporting line would create a cycle in the org chart."
+        "That reporting line would create a cycle in the org chart.",
       );
     }
     seen.add(cursor);
 
-    const manager: any = await Employee.findById(cursor).select("reportsTo").lean();
+    const manager: any = await Employee.findById(cursor)
+      .select("reportsTo")
+      .lean();
     if (!manager) break;
 
     cursor = manager.reportsTo ? String(manager.reportsTo) : null;
@@ -89,7 +114,9 @@ export async function assertNoReportingCycle(
  * Deletes are blocked rather than cascaded — silently orphaning five people
  * because someone removed their manager is worse than an error message.
  */
-export async function assertEmployeeDeletable(employeeId: string): Promise<void> {
+export async function assertEmployeeDeletable(
+  employeeId: string,
+): Promise<void> {
   const ctx = getContext();
 
   if (ctx?.employeeId && String(ctx.employeeId) === String(employeeId)) {
@@ -99,7 +126,7 @@ export async function assertEmployeeDeletable(employeeId: string): Promise<void>
   const reportees = await Employee.countDocuments({ reportsTo: employeeId });
   if (reportees > 0) {
     throw new ConflictError(
-      `This employee has ${reportees} direct reportee(s). Reassign them before deleting.`
+      `This employee has ${reportees} direct reportee(s). Reassign them before deleting.`,
     );
   }
 
@@ -107,11 +134,14 @@ export async function assertEmployeeDeletable(employeeId: string): Promise<void>
   if (db) {
     const assets = await db
       .collection("assets")
-      .countDocuments({ assignedTo: new mongoose.Types.ObjectId(employeeId), returnedOn: null })
+      .countDocuments({
+        assignedTo: new mongoose.Types.ObjectId(employeeId),
+        returnedOn: null,
+      })
       .catch(() => 0);
     if (assets > 0) {
       throw new ConflictError(
-        `This employee still holds ${assets} assigned asset(s). Mark them returned first.`
+        `This employee still holds ${assets} assigned asset(s). Mark them returned first.`,
       );
     }
   }
@@ -129,7 +159,9 @@ const TRACKED: Array<{ path: string; changeType: ChangeType }> = [
 ];
 
 function valueAt(obj: any, path: string) {
-  return path.split(".").reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
+  return path
+    .split(".")
+    .reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
 }
 
 /**
@@ -142,7 +174,7 @@ function valueAt(obj: any, path: string) {
 export async function recordEmploymentChanges(
   before: any,
   after: any,
-  reason?: string
+  reason?: string,
 ): Promise<void> {
   const ctx = getContext();
   const orgId = after.orgId ?? requireOrgId();

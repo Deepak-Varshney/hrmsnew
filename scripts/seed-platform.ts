@@ -1164,6 +1164,14 @@ async function main() {
           }
         }
 
+        // These codes were assigned directly, so the org's counter still reads
+        // zero and the next employee added through the UI would be handed
+        // EMP0001 again. generateEmployeeCode() now skips taken codes anyway,
+        // but leaving the counter wrong just to lean on that would be sloppy.
+        await Organization.findByIdAndUpdate(orgId, {
+          $set: { employeeCodeSeq: seq },
+        });
+
         log(
           "people",
           `${people.length} across ${spec.teams.length} teams ` +

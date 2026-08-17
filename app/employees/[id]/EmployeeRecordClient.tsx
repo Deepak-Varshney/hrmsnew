@@ -2,10 +2,14 @@
 
 // A person's record. Read-only — see the note on the page component.
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileText, Mail, Phone } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { ArrowLeft, FileText, Mail, Phone, Pencil, Trash2 } from "lucide-react";
 
 import { StatusPill, EMPLOYEE_STATUS_TONE } from "@/components/ui/status-pill";
+import { Button } from "@/components/ui/button";
 import { formatDate, formatINR } from "@/lib/format";
 import { initialsOf } from "@/components/app/TopBar";
 
@@ -41,10 +45,18 @@ function Card({
 export function EmployeeRecordClient({
   profile,
   viewerRole,
+  employeeId,
+  canEdit = false,
+  canDelete = false,
 }: {
   profile: any;
   viewerRole: string;
+  employeeId?: string;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
   const e = profile.employee ?? {};
   const emp = e.employment ?? {};
   const contact = e.contact ?? {};
@@ -54,15 +66,64 @@ export function EmployeeRecordClient({
   // masks them with it. Absent means the viewer is not allowed to see them.
   const seesPii = Boolean(e.statutory || e.bank);
 
+  async function remove() {
+    // Soft delete — the record goes to the recycle bin, not away. Say so, so
+    // nobody hesitates over a decision that is reversible.
+    const ok = window.confirm(
+      `Remove ${e.displayName} from the roster?\n\nThis is reversible — the record moves to the recycle bin and only a super admin can destroy it for good.`,
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/employees/${employeeId}`, {
+        method: "DELETE",
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? "Could not remove");
+      toast.success(result.message ?? `${e.displayName} removed.`);
+      router.replace("/employees");
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message);
+      setDeleting(false);
+    }
+  }
+
   return (
     <>
-      <Link
-        href="/employees"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-        All employees
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href="/employees"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+          All employees
+        </Link>
+
+        <div className="flex gap-2">
+          {canEdit ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/employees/${employeeId}/edit`}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Edit
+              </Link>
+            </Button>
+          ) : null}
+          {canDelete ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={remove}
+              disabled={deleting}
+              className="text-danger hover:bg-danger/10"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              Remove
+            </Button>
+          ) : null}
+        </div>
+      </div>
 
       <header className="flex flex-wrap items-center gap-4 rounded-lg border bg-surface p-5">
         {e.photo ? (

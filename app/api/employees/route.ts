@@ -38,7 +38,7 @@ export const GET = withContext(
 
     return NextResponse.json(result);
   },
-  { permission: "employee.read" }
+  { permission: "employee.read" },
 );
 
 /**
@@ -79,9 +79,13 @@ export const POST = withContext(
     if (!dateOfJoining) throw new ValidationError("dateOfJoining is required.");
 
     if (workEmail) {
-      const clash = await Employee.findOne({ "contact.workEmail": workEmail.toLowerCase() });
+      const clash = await Employee.findOne({
+        "contact.workEmail": workEmail.toLowerCase(),
+      });
       if (clash) {
-        throw new ConflictError("An employee with that work email already exists.");
+        throw new ConflictError(
+          "An employee with that work email already exists.",
+        );
       }
     }
 
@@ -91,7 +95,8 @@ export const POST = withContext(
     }
 
     const employeeCode =
-      providedCode?.trim()?.toUpperCase() || (await generateEmployeeCode(orgId));
+      providedCode?.trim()?.toUpperCase() ||
+      (await generateEmployeeCode(orgId));
 
     const employee = await Employee.create({
       orgId,
@@ -131,6 +136,16 @@ export const POST = withContext(
     });
 
     // Optional portal login.
+    //
+    // Asked for but malformed is an error, not a no-op: `createLogin: true`
+    // used to fall straight through here, leaving an employee on the roster
+    // with no way to sign in and nothing saying so.
+    if (createLogin && !createLogin.password) {
+      throw new ValidationError(
+        "createLogin needs a password — send { email?, password, role? }.",
+      );
+    }
+
     let user: any = null;
     if (createLogin?.password) {
       const loginEmail = (createLogin.email ?? workEmail)?.toLowerCase();
@@ -178,8 +193,8 @@ export const POST = withContext(
           displayName: employee.displayName,
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
   },
-  { permission: "employee.create" }
+  { permission: "employee.create" },
 );

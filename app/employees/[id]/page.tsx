@@ -2,9 +2,9 @@
 //
 // One person's record, as seen by whoever has the reach to open it.
 //
-// Read-only on purpose: edits go through the employee's own profile and the
-// change-request queue, so there is exactly one write path for a person's
-// details rather than two that can disagree.
+// Editing is a separate page rather than inline fields, because an admin
+// writing here is a different act from an employee editing their own profile:
+// this one saves immediately, that one raises a change request.
 
 import { notFound, redirect } from "next/navigation";
 import { loadWithSession } from "@/lib/session";
@@ -30,7 +30,15 @@ export default async function EmployeeRecordPage({
     // the record is loaded, so an out-of-reach id reveals nothing at all.
     if (!(await isWithinScope(scope, id))) return { denied: true as const };
 
-    return { profile: await loadProfile(id) };
+    const updateScope = can("employee.update");
+    const deleteScope = can("employee.delete");
+
+    return {
+      profile: await loadProfile(id),
+      canEdit: updateScope !== "none" && (await isWithinScope(updateScope, id)),
+      canDelete:
+        deleteScope !== "none" && (await isWithinScope(deleteScope, id)),
+    };
   });
 
   if ("denied" in data) redirect("/employees");
@@ -41,6 +49,9 @@ export default async function EmployeeRecordPage({
       <EmployeeRecordClient
         profile={JSON.parse(JSON.stringify(data.profile))}
         viewerRole={session.role}
+        employeeId={id}
+        canEdit={data.canEdit}
+        canDelete={data.canDelete && session.employeeId !== id}
       />
     </AppShell>
   );

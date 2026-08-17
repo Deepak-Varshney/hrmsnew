@@ -3,7 +3,15 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Users, UserCheck, UserMinus, LogOut, Building2 } from "lucide-react";
+import {
+  Search,
+  Users,
+  UserCheck,
+  UserMinus,
+  LogOut,
+  Building2,
+  UserPlus,
+} from "lucide-react";
 
 import { initialsOf } from "@/components/app/TopBar";
 import { PageHeader } from "@/components/ui/page-header";
@@ -88,11 +96,16 @@ export function EmployeesClient({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
+  // Onboarding is HR's job. A lead sees the roster but never this button.
+  const canCreate = role === "ADMIN" || role === "SUPER_ADMIN";
+
   const [search, setSearch] = useState(filters.search);
   const [status, setStatus] = useState(filters.status);
   const [departmentId, setDepartmentId] = useState(filters.departmentId);
 
-  const isFiltered = Boolean(filters.search || filters.status || filters.departmentId);
+  const isFiltered = Boolean(
+    filters.search || filters.status || filters.departmentId,
+  );
 
   function applyFilters() {
     const next = new URLSearchParams();
@@ -110,6 +123,16 @@ export function EmployeesClient({
       <PageHeader
         title="Employees"
         description={describeScope(role, orgName)}
+        actions={
+          canCreate ? (
+            <Button asChild>
+              <Link href="/employees/new">
+                <UserPlus className="mr-1.5 h-4 w-4" aria-hidden />
+                Add employee
+              </Link>
+            </Button>
+          ) : null
+        }
       />
 
       <StatGrid>
@@ -226,7 +249,9 @@ export function EmployeesClient({
               <thead>
                 <tr className="border-b text-left">
                   <th className="eyebrow px-4 py-3 font-semibold">Employee</th>
-                  <th className="eyebrow px-4 py-3 font-semibold">Designation</th>
+                  <th className="eyebrow px-4 py-3 font-semibold">
+                    Designation
+                  </th>
                   <th className="eyebrow hidden px-4 py-3 font-semibold md:table-cell">
                     Department
                   </th>
@@ -240,7 +265,10 @@ export function EmployeesClient({
                 {employees.map((row) => {
                   const rowStatus = row.employment?.status ?? "active";
                   return (
-                    <tr key={row._id} className="transition-colors hover:bg-muted/40">
+                    <tr
+                      key={row._id}
+                      className="transition-colors hover:bg-muted/40"
+                    >
                       <td className="px-4 py-3">
                         <Link
                           href={`/employees/${row._id}`}
@@ -266,7 +294,9 @@ export function EmployeesClient({
                         {row.departmentId?.name ?? "—"}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusPill tone={EMPLOYEE_STATUS_TONE[rowStatus] ?? "neutral"}>
+                        <StatusPill
+                          tone={EMPLOYEE_STATUS_TONE[rowStatus] ?? "neutral"}
+                        >
                           {STATUS_LABEL[rowStatus] ?? rowStatus}
                         </StatusPill>
                       </td>
